@@ -8,6 +8,8 @@
 namespace ToySim {
   
   void SPU::Compute(std::vector<int> &Instructions) {
-    
+    for (auto &Instruction : Instructions) {
+      
+    }
   }
 } // namespace ToySim
