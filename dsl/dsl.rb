@@ -1,8 +1,6 @@
 # TODO support labels and offset.(base) syntax
-
-
+# core_dsl.rb
 class DSL
-
   REGISTER_PATTERN = /\A[xif][0-9]+\z/
   LABEL_NAME_PATTERN = /\A[a-zA-Z_][a-zA-Z0-9_]*\z/
   REG_MAP = {
@@ -21,17 +19,16 @@ class DSL
 
   INSTRUCTION_LAYOUTS = {
     add: {
-      opcode: OPCODES['add'], # R-type opcode
-      funct5: 0b00000,     # Specific to ADD
-      funct6: 0b000000, # Specific to ADD
+      opcode: OPCODES['add'],
+      funct5: 0b00000,
+      funct6: 0b000000,
       fields: [
-        # [field_type, size_in_bits, start_bit_position]
-        [:funct6, 6, 26], # funct7 (7 bits) starts at bit 25
-        [:rs,    5, 21], # rs2 (5 bits) starts at bit 20
-        [:rt,    5, 16], # rs1 (5 bits) starts at bit 15
-        [:rd,     5, 11], # rd (5 bits) starts at bit 7
-        [:funct5, 5, 6], # funct3 (3 bits) starts at bit 12
-        [:opcode, 6, 0 ]  # opcode (7 bits) starts at bit 0
+        [:funct6, 6, 26],
+        [:rs,    5, 21],
+        [:rt,    5, 16],
+        [:rd,     5, 11],
+        [:funct5, 5, 6],
+        [:opcode, 6, 0 ]
       ]
     },
     j: {
@@ -132,12 +129,12 @@ class DSL
         [:rd, 5, 21],
         [:rs, 5, 16],
         [:imm, 5, 11],
-        [:funct11, 0]
+        [:funct11, 11, 0]
       ]
     },
     beq: {
       opcode: OPCODES['beq'],
-      fileds: [
+      fields: [
         [:opcode, 6, 26],
         [:rs, 5, 21],
         [:rd, 5, 16],
@@ -171,17 +168,22 @@ class DSL
     }
   }.freeze
 
+
+  def initialize
+    @buffer = []
+    @IP = 0
+    # labels = {}
+  end
+
   def method_missing(method_name, *args, &block)
+    puts "Missing method name:#{method_name}"
     if method_name.to_s.match?(REGISTER_PATTERN)
       if args.any? || block
         super
       else
         method_name
       end
-    elsif method_name.to_s.match?(LABEL_NAME_PATTERN) && args.empty? && !block
-      super
     else
-      # super
       handle_instruction_call(method_name, *args)
     end
   end
@@ -190,182 +192,54 @@ class DSL
     method_name.to_s.match?(REGISTER_PATTERN) || INSTRUCTION_LAYOUTS.key?(method_name) || super
   end
 
-  def initialize
-    @buffer = []
-    # @buffer = String.new.force_encoding('ASCII-8BIT')
-    @IP = 0
-    @labels = {}
-  end
-
-  # Define a label
-  # Usage: label :LoopStart
-  def label(name_sym)
-    if name_sym.is_a?(Symbol)
-      if @labels.key?(name_sym)
-          existing_info = @labels[name_sym]
-          if existing_info[:address].nil?
-              # Label was referenced but not defined, now define it
-              existing_info[:address] = @IP
-              puts "Defined label :#{name_sym} at address 0x#{@IP.to_s(16).rjust(8, '0').upcase}"
-              # Backpatch all unresolved references to this label
-              existing_info[:unresolved_pcs].each do |pc_addr|
-                  # Calculate offset: target_addr - pc_of_branch_instruction
-                  # pc_of_branch_instruction = pc_addr (address where the instruction is stored)
-                  offset = existing_info[:address] - pc_addr
-                  puts "Backpatching instruction at PC 0x#{pc_addr.to_s(16)} for label :#{name_sym}, offset = #{offset}"
-
-                  # Find the instruction in the buffer and re-encode it with the correct offset
-                  buffer_index = pc_addr / 4 # Convert byte address to buffer index
-                  original_instruction_int = @buffer[buffer_index]
-
-                  # For simplicity, assume the instruction layout is known for the opcode of the original instruction
-                  # Decode the original instruction to find its type
-                  original_opcode = original_instruction_int & 0b1111111
-                  layout = nil
-                  INSTRUCTION_LAYOUTS.each do |name, info|
-                      if info[:opcode] == original_opcode
-                          layout = info
-                          break
-                      end
-                  end
-
-                  if layout && layout[:fields].any? { |field| field[0] == :offset} # Check if it has an immediate field
-                      pending_patch = @pending_backpatches.find { |pb| pb[:pc_addr] == pc_addr && pb[:label] == name_sym }
-                      if pending_patch
-                          re_encoded_instruction = encode_instruction_with_offset(pending_patch[:layout], pending_patch[:args_map], offset)
-                          @buffer[buffer_index] = re_encoded_instruction
-                          puts "  -> Re-encoded instruction: 0x#{re_encoded_instruction.to_s(16).rjust(8, '0').upcase}"
-                          @pending_backpatches.delete(pending_patch)
-                      else
-                          puts "  -> Warning: Could not find pending patch for PC 0x#{pc_addr.to_s(16)} and label :#{name_sym}"
-                      end
-                  else
-                      puts "  -> Warning: Could not find layout or immediate field for instruction at PC 0x#{pc_addr.to_s(16)}"
-                  end
-              end
-              existing_info[:unresolved_pcs].clear
-          else
-              puts "Warning: Label :#{name_sym} redefined at address 0x#{@IP.to_s(16).rjust(8, '0').upcase} (previously at 0x#{@labels[name_sym][:address].to_s(16).rjust(8, '0')})"
-              @labels[name_sym][:address] = @IP
-          end
-      else
-          @labels[name_sym] = { address: @IP, unresolved_pcs: [] }
-          puts "Defined label :#{name_sym} at address 0x#{@IP.to_s(16).rjust(8, '0').upcase}"
-      end
-    else
-      raise ArgumentError, "Label name must be a symbol, e.g., :LabelName"
-    end
-  end
-
-  # Helper method to re-encode an instruction with a resolved offset
-  def encode_instruction_with_offset(layout, original_args_map, resolved_offset)
-    # Create a new args_map based on the original, but update the immediate field
-    args_map_for_reencode = original_args_map.dup
-    # Find the immediate field and update its value
-    layout[:fields].each do |field_type, size, start_bit|
-        if field_type == :imm
-            args_map_for_reencode[field_type] = resolved_offset
-            break # Assuming only one :imm field for this example
-        end
-    end
-    encode_instruction(layout, args_map_for_reencode)
-  end
-
-  private 
+  private
 
   def handle_instruction_call(instruction_name, *operands)
+    puts "inst name: #{instruction_name}"
     layout = INSTRUCTION_LAYOUTS[instruction_name]
     unless layout
       raise NoMethodError, "Undefined instruction: #{instruction_name}"
     end
-
+    operands = operands.flatten
+    puts operands.to_s
     args_map = {}
     operand_index = 0
-    unresolved_label_operand = nil # Track if an immediate operand is a label symbol
-    original_operands_for_backpatch = operands.dup # Store original operands for potential backpatching
-
     layout[:fields].each do |field_type, size, start_bit|
       case field_type
-      when :rd, :rs1, :rs2, :rt, :rs
+      when :rd, :rs1, :rs2, :rt, :rs, :base
         reg_name = operands[operand_index]
+        puts reg_name.to_s
         reg_num = REG_MAP[reg_name.to_s]
         if reg_num.nil?
           raise ArgumentError, "Invalid register specified for #{field_type}: #{reg_name}"
         end
         args_map[field_type] = reg_num
         operand_index += 1
-      when :imm, :offset
+      when :imm5, :imm, :offset
         imm_value = operands[operand_index]
-        if imm_value.is_a?(Symbol) # It's a label reference
-            # Check if the label is already defined
-            if @labels.key?(imm_value) && @labels[imm_value][:address]
-                # Label exists and is defined, calculate offset now
-                target_addr = @labels[imm_value][:address]
-                pc_of_this_instruction = @IP # Address where this instruction will be stored
-                offset = target_addr - pc_of_this_instruction
-                args_map[field_type] = offset
-                puts "Resolved immediate for #{instruction_name} using label :#{imm_value} (addr 0x#{target_addr.to_s(16)}) -> offset #{offset} (PC 0x#{pc_of_this_instruction.to_s(16)})"
-            else
-                # Label does not exist or is not yet defined, mark it as unresolved
-                unresolved_label_operand = imm_value
-                args_map[field_type] = 0 # Placeholder value (e.g., 0)
-                # Add this label and PC to the unresolved list in @labels
-                @labels[imm_value] ||= { address: nil, unresolved_pcs: [] }
-                @labels[imm_value][:unresolved_pcs] << @IP
-                puts "Unresolved label reference :#{imm_value} found in #{instruction_name}, PC 0x#{@IP.to_s(16)}. Placeholder (0) used. Added to unresolved list."
-            end
-        else
-            # It's a numeric immediate
-            args_map[field_type] = imm_value
-        end
+        puts imm_value
+        # TODO imm validation
+        args_map[field_type] = imm_value
         operand_index += 1
       when :funct3, :funct5, :funct6, :funct7, :funct10, :funct11, :opcode
         args_map[field_type] = layout[field_type]
       else
-        # Handle other fixed fields if present
+        raise ArgumentError "Incorrect operand for field type #{field_type}: #{operands[operand_index]}"
       end
     end
 
+    # Encode the instruction based on the layout and arguments
     encoded_instruction = encode_instruction(layout, args_map)
 
+    # Write the encoded instruction to the buffer
     @buffer << encoded_instruction
-    puts "Encoded #{instruction_name} (#{operands.join(', ')}): 0x#{encoded_instruction.to_s(16).rjust(8, '0').upcase} (PC 0x#{@IP.to_s(16).rjust(8, '0')})"
+    puts "Encoded #{instruction_name} (#{operands.join(', ')}): 0x#{encoded_instruction.to_s(16).rjust(8, '0').upcase}"
 
-    # If there was an unresolved label, we need to store context for backpatching later
-    if unresolved_label_operand
-        # Create a structure to hold the info needed for backpatching
-        backpatch_info = {
-            pc_addr: @IP,
-            label: unresolved_label_operand,
-            layout: layout,
-            args_map: args_map, # This contains the placeholder 0 for imm
-            original_operands: original_operands_for_backpatch # Keep original for re-encoding logic
-        }
-        # Store this info in an instance variable array
-        @pending_backpatches ||= []
-        @pending_backpatches << backpatch_info
-    end
-
-    # Update the current address after encoding an instruction
-    @IP += 4
+    # Optional: Return the encoded instruction or the DSL object for chaining
     encoded_instruction
   end
 
   private
-
-  def resolve_label_offset(label_sym)
-    if @labels.key?(label_sym)
-      pc_of_branch = @IP - 4
-      target_addr = @labels[label_sym]
-      offset = target_addr - pc_of_branch
-      puts "Resolved label :#{label_sym} (addr 0x#{target_addr.to_s(16)}) relative to PC 0x#{pc_of_branch.to_s(16)}, offset = #{offset}"
-      offset
-    else
-      raise ArgumentError, "Label not found: #{label_sym}"
-    end
-  end
-
-  private 
 
   def encode_instruction(layout, args_map)
     instruction = 0
@@ -373,42 +247,36 @@ class DSL
     layout[:fields].each do |field_type, size, start_bit|
       value_to_insert = args_map[field_type]
       if value_to_insert.nil?
-        raise "Missing value for field type: #{field_type}"
+        raise ArgumentError "Missing value for field type: #{field_type}"
       end
-
       # Mask the value to fit within the specified size
       mask = (1 << size) - 1
       masked_value = value_to_insert & mask
 
-      # Shift the masked value to its correct position
+      # Shift to the correct position
       shifted_value = masked_value << start_bit
 
-      # Combine it with the instruction using OR
+      # Add value to instrucition
       instruction |= shifted_value
     end
-    @IP += 4
+
     instruction
   end
 
   public
 
   def dump_buffer_to_file(filename)
-    # Verify all labels are resolved
-    unresolved_labels = @labels.select { |name, info| info[:address].nil? || info[:unresolved_pcs].any? }
-    if unresolved_labels.any?
-        puts "ERROR: Unresolved labels found:"
-        unresolved_labels.each { |name, info| puts "  - :#{name} (PCs: #{info[:unresolved_pcs].map { |pc| '0x' + pc.to_s(16) }.join(', ')})" }
-        raise "Assembly failed due to unresolved labels: #{unresolved_labels.keys.join(', ')}"
-    else
-        puts "All labels resolved successfully."
-    end
-
     File.open(filename, 'wb') do |file|
       @buffer.each do |instruction_int|
-        file.write [instruction_int].pack('V') # 'V' for little-endian 32-bit unsigned int
+        file.write [instruction_int].pack('V') # V is for lil endian
       end
     end
-    puts "Buffer dumped to #{filename}. Buffer size: #{@buffer.length} instructions (#{@buffer.length * 4} bytes)."
-    puts "Labels defined: #{@labels}"
+    puts "Buffer dumped to #{filename}. Buffer size: #{@buffer.length} instructions."
+  end
+end
+
+class Integer
+  def call(reg)
+    return [reg, self]
   end
 end
