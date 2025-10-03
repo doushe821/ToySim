@@ -1,5 +1,6 @@
 require_relative 'dsl_wrapper'
 include DSLWrapper
+
 dsl_obj = dsl do
   j 12
   add x1, x2, x3
@@ -13,11 +14,12 @@ dsl_obj = dsl do
   usat x1, x2, 1
   ld x1, 32.(x2)
   st x1, 32.(x2)
-  # Cocks
+
   stp x1, x2, 32.(x3)
+  j gay
+  label gay
   # Halls of awaiting:
   # syscall exit
-
 end
 
 dsl_obj.dump_buffer_to_file("output.bin")

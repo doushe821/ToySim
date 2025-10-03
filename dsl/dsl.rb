@@ -35,7 +35,7 @@ class DSL
       opcode: OPCODES['j'],
       fields: [
         [:opcode, 6, 26],
-        [:imm, 26, 0]
+        [:index, 26, 0]
       ]
     },
     movn: {
@@ -171,18 +171,19 @@ class DSL
 
   def initialize
     @buffer = []
-    @IP = 0
-    # labels = {}
+    @PC = 0
+    @labels = {}
   end
 
   def method_missing(method_name, *args, &block)
-    puts "Missing method name:#{method_name}"
     if method_name.to_s.match?(REGISTER_PATTERN)
       if args.any? || block
         super
       else
         method_name
       end
+    elsif !args.any? && method_name.to_s.match?(LABEL_NAME_PATTERN) # That's a label
+      method_name
     else
       handle_instruction_call(method_name, *args)
     end
@@ -192,23 +193,46 @@ class DSL
     method_name.to_s.match?(REGISTER_PATTERN) || INSTRUCTION_LAYOUTS.key?(method_name) || super
   end
 
+  def label(label_name)
+    # TODO namecheck maybe
+    if @labels.key?(label_name)
+      label_info = @labels[label_name]
+
+      if label_info[:address] != nil
+        raise "Label redefinition: #{label_name} on PC 0x#{@PC}, previously defined on PC 0x#{label_info[:address]}"
+      end
+
+      label_info[:address] = @PC
+      label_info[:pending_offsets].each do |instr_pc, offset_size, offset_start| # Back patching
+        # TODO backpatching
+        relative_offset = @PC - instr_pc # TODO might be wrong xd
+        offset_mask = (1 << offset_size) - 1
+        relative_offset = relative_offset & offset_mask
+        relative_offset = relative_offset << offset_start
+        @buffer[instr_pc / 4] |= relative_offset
+        puts "Backpatch completed: #{label_name}: 0x#{@buffer[instr_pc / 4].to_s(16).rjust(8, '0').upcase}"
+      end
+
+    else 
+      @labels[label_name] = { address: @PC, pending_offsets: [[]]}
+      puts "Defined label : #{label_name} at address 0x#{@PC.to_s}"
+    end
+  end
+
   private
 
   def handle_instruction_call(instruction_name, *operands)
-    puts "inst name: #{instruction_name}"
     layout = INSTRUCTION_LAYOUTS[instruction_name]
     unless layout
       raise NoMethodError, "Undefined instruction: #{instruction_name}"
     end
     operands = operands.flatten
-    puts operands.to_s
     args_map = {}
     operand_index = 0
     layout[:fields].each do |field_type, size, start_bit|
       case field_type
-      when :rd, :rs1, :rs2, :rt, :rs, :base
+      when :rd, :rs1, :rs2, :rt, :rt1, :rt2, :rs, :base
         reg_name = operands[operand_index]
-        puts reg_name.to_s
         reg_num = REG_MAP[reg_name.to_s]
         if reg_num.nil?
           raise ArgumentError, "Invalid register specified for #{field_type}: #{reg_name}"
@@ -217,10 +241,36 @@ class DSL
         operand_index += 1
       when :imm5, :imm, :offset
         imm_value = operands[operand_index]
-        puts imm_value
         # TODO imm validation
         args_map[field_type] = imm_value
         operand_index += 1
+      when :index
+        if operands[operand_index].is_a?(Integer) # Jump in Imm
+          imm_value = operands[operand_index]
+          args_map[field_type] = imm_value
+          operand_index += 1
+        else # Jump on label
+          label_name = operands[operand_index]
+          if @labels.key?(label_name)
+            label_info = @labels[label_name]
+            if label_info[:address] == nil
+
+              @labels[label_name][:pending_offsets] << [@PC, size, start_bit] # TODO learn how to update correctly
+
+              args_map[field_type] = 0
+              operand_index += 1
+            else 
+              label_address = label_info[:address]
+              relative_offset = label_address - @PC
+              args_map[field_type] = relative_offset
+              operand_index += 1
+            end
+          else
+              @labels[label_name] = { address: nil, pending_offsets: [[@PC, size, start_bit]]}
+              args_map[field_type] = 0
+              operand_index += 1
+          end
+        end
       when :funct3, :funct5, :funct6, :funct7, :funct10, :funct11, :opcode
         args_map[field_type] = layout[field_type]
       else
@@ -234,7 +284,7 @@ class DSL
     # Write the encoded instruction to the buffer
     @buffer << encoded_instruction
     puts "Encoded #{instruction_name} (#{operands.join(', ')}): 0x#{encoded_instruction.to_s(16).rjust(8, '0').upcase}"
-
+    @PC += 4
     # Optional: Return the encoded instruction or the DSL object for chaining
     encoded_instruction
   end
