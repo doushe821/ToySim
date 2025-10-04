@@ -1,6 +1,7 @@
 #pragma once
 #include <vector>
 #include <cassert>
+#include <fstream>
 namespace ToySim {
 
 enum InstructionTypesCodes {
@@ -126,14 +127,40 @@ static const Instruction Instructions[] {
 
 class SPU {
 private:
-  static const unsigned RegNum = 32;
-  static const unsigned MemorySize = 1024;
-  char Memory[MemorySize];
-  int Regs[RegNum];
+  // Valid.
+  std::vector<int> BinInstructions;
+  
+  // Gay
+  const unsigned RegNum = 32;
+  const unsigned MemorySize = 1024;
+  std::vector<char> Memory;
+  std::vector<int> Regs;
   unsigned PC = 0;
 
 public:
-  void Compute(std::vector<int> &Instructions);
+  // Valid.
+  SPU(const std::string& FileName, unsigned RegNum = 32, unsigned MemorySize = 1024) : RegNum(RegNum), MemorySize(MemorySize) {
+    std::ifstream File(FileName, std::ios::binary);
+    if (!File.is_open()) {
+        assert(0);
+    }
+    
+    int Instruction;
+    while (File >> Instruction) {
+      BinInstructions.push_back(Instruction);
+    }
+    File.close();
+
+    if (RegNum == 0 || MemorySize == 0) {
+      assert(0);
+    }
+
+    Memory.resize(MemorySize);
+    Regs.resize(RegNum);
+  }
+
+  // Gay
+  void Compute();
   void StateDump() const;
   void RegDump() const;
   void MemoryDump() const;

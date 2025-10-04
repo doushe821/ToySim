@@ -18,6 +18,7 @@ dsl_obj = dsl do
   stp x1, x2, 32.(x3)
   j gay
   label gay
+  syscall
   # Halls of awaiting:
   # syscall exit
 end

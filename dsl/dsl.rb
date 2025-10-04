@@ -85,9 +85,10 @@ class DSL
     syscall: {
       opcode: OPCODES['syscall'],
       funct6: 0b000000,
+      funct20: 0b00000000000000000000,
       fields: [
         [:funct6, 6, 26],
-        [:code, 20, 6],
+        [:funct20, 20, 6],
         [:opcode, 6, 0]
       ]
     },
@@ -271,7 +272,7 @@ class DSL
               operand_index += 1
           end
         end
-      when :funct3, :funct5, :funct6, :funct7, :funct10, :funct11, :opcode
+      when :funct3, :funct5, :funct6, :funct7, :funct10, :funct11, :funct20, :opcode
         args_map[field_type] = layout[field_type]
       else
         raise ArgumentError "Incorrect operand for field type #{field_type}: #{operands[operand_index]}"
