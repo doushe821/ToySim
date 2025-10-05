@@ -1,5 +1,7 @@
-# TODO support labels and offset.(base) syntax
-# core_dsl.rb
+# TODO rip & tear
+module Kernel 
+  undef :syscall
+end
 class DSL
   REGISTER_PATTERN = /\A[xif][0-9]+\z/
   LABEL_NAME_PATTERN = /\A[a-zA-Z_][a-zA-Z0-9_]*\z/
@@ -177,16 +179,21 @@ class DSL
   end
 
   def method_missing(method_name, *args, &block)
+    puts "stiny winky #{method_name}"
     if method_name.to_s.match?(REGISTER_PATTERN)
       if args.any? || block
         super
       else
         method_name
       end
+    elsif OPCODES.key?(method_name.to_s)
+      puts "winy winky #{method_name}"
+      handle_instruction_call(method_name, *args)
     elsif !args.any? && method_name.to_s.match?(LABEL_NAME_PATTERN) # That's a label
+      puts "stiny pinky #{method_name}"
       method_name
     else
-      handle_instruction_call(method_name, *args)
+      raise "Lexer failure, undefined token"
     end
   end
 
@@ -224,6 +231,7 @@ class DSL
 
   def handle_instruction_call(instruction_name, *operands)
     layout = INSTRUCTION_LAYOUTS[instruction_name]
+    puts instruction_name
     unless layout
       raise NoMethodError, "Undefined instruction: #{instruction_name}"
     end
@@ -331,3 +339,4 @@ class Integer
     return [reg, self]
   end
 end
+

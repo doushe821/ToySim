@@ -1,8 +1,12 @@
 #pragma once
+#include <cstdint>
+#include <unordered_map>
 #include <vector>
 #include <cassert>
 #include <fstream>
+#include <limits>
 namespace ToySim {
+// Gay
 
 enum InstructionTypesCodes {
   JType, // OpCode, imm
@@ -23,9 +27,9 @@ enum EncodingPartCode {
 };
 
 class EncodingPart {
+public:
   EncodingPartCode PartCode;
   unsigned PartSize;
-public:
   EncodingPart(EncodingPartCode Code, unsigned Size = 6) { // Optional may be
     PartCode = Code;
     switch (Code) {
@@ -46,7 +50,7 @@ public:
         break;
       }
       default: {
-        assert(0 && "Wrong part code\n");
+        assert(!"Wrong part code\n");
       }
     }
   }
@@ -57,7 +61,39 @@ struct InstructionType {
   std::vector<EncodingPart> Layout;
 };
 
-static const InstructionType InstructionTypes[] {
+enum LocalOpcodes {
+  J,
+  MOVN,
+  RBIT,
+  ADD,
+  SLTI,
+  LD,
+  SYSCALL,
+  CBIT,
+  STP,
+  BNE,
+  USAT,
+  BEQ,
+  BDEP,
+  ST,
+  UNDEFINED
+};
+
+// Valid.
+
+const unsigned Low6bitMask = 63;
+const unsigned High6bitMask = 0xfc000000;
+
+enum OperandTypes {
+  RegOT,
+  ImmOT
+};
+struct Operand {
+  int Value;
+  EncodingPartCode OperandType;
+};
+
+const std::unordered_map<const InstructionTypesCodes, const std::vector<EncodingPart>> InstructionTypes { // TODO change name
   {JType, {{OpCodeEncoding}, {ImmEncoding, 26}}},
   {BType, {{OpCodeEncoding}, {RegEncoding}, {RegEncoding}, {ImmEncoding, 16}}},
   {EType, {{OpCodeEncoding}, {RegEncoding}, {RegEncoding}, {ImmEncoding, 5}, {ZeroEncoding, 11}}},
@@ -84,58 +120,44 @@ enum OpCodes {
   OpCodeBDEP = 0b001100,
   OpCodeST = 0b100101,
 };
-
-enum LocalOpcodes {
-  J,
-  MOVN,
-  RBIT,
-  ADD,
-  SLTI,
-  LD,
-  SYSCALL,
-  CBIT,
-  STP,
-  BNE,
-  USAT,
-  BEQ,
-  BDEP,
-  ST,
-  UNDEFINED
-};
-
 struct Instruction {
-  char OpCode;
-  InstructionType Type;
+  OpCodes OpCode;
+  std::vector<Operand> Operands = {};
 };
 
-static const Instruction Instructions[] {
-  {OpCodeJ, InstructionTypes[JType]},
-  {OpCodeMOVN, InstructionTypes[CType]},
-  {OpCodeRBIT, InstructionTypes[CDType]},
-  {OpCodeADD, InstructionTypes[CType]},
-  {OpCodeSLTI, InstructionTypes[BType]},
-  {OpCodeLD, InstructionTypes[BType]},
-  {OpCodeSYSCALL, InstructionTypes[SysType]},
-  {OpCodeCBIT, InstructionTypes[EType]}, 
-  {OpCodeSTP, InstructionTypes[DSType]},
-  {OpCodeBNE, InstructionTypes[BType]},
-  {OpCodeUSAT, InstructionTypes[EType]},
-  {OpCodeBEQ, InstructionTypes[BType]},
-  {OpCodeBDEP, InstructionTypes[CType]},
-  {OpCodeST, InstructionTypes[BType]}
+
+static const std::unordered_map<const OpCodes, std::pair<InstructionTypesCodes, const std::vector<EncodingPart>>> Layouts = {
+{OpCodeJ, {JType, InstructionTypes.at(JType)}},
+{OpCodeMOVN, {CType, InstructionTypes.at(CType)}},
+{OpCodeRBIT, {CDType, InstructionTypes.at(CDType)}},
+{OpCodeADD, {CType, InstructionTypes.at(CType)}},
+{OpCodeSLTI, {BType, InstructionTypes.at(BType)}},
+{OpCodeLD, {BType, InstructionTypes.at(BType)}},
+{OpCodeSYSCALL, {SysType, InstructionTypes.at(SysType)}},
+{OpCodeCBIT, {EType, InstructionTypes.at(EType)}}, 
+{OpCodeSTP, {DSType, InstructionTypes.at(DSType)}},
+{OpCodeBNE, {BType, InstructionTypes.at(BType)}},
+{OpCodeUSAT, {EType, InstructionTypes.at(EType)}},
+{OpCodeBEQ, {BType, InstructionTypes.at(BType)}},
+{OpCodeBDEP, {CType, InstructionTypes.at(CType)}},
+{OpCodeST, {BType, InstructionTypes.at(BType)}}
 };
 
 class SPU {
 private:
   // Valid.
   std::vector<int> BinInstructions;
-  
-  // Gay
   const unsigned RegNum = 32;
   const unsigned MemorySize = 1024;
-  std::vector<char> Memory;
+  std::vector<int> Memory;
   std::vector<int> Regs;
   unsigned PC = 0;
+  // architecture described operations:
+  int Reverse(int Val);
+  int signExtend(int Val);
+  int saturateUnsigned(int Val, int N);
+
+  // Gay
 
 public:
   // Valid.
@@ -158,6 +180,8 @@ public:
     Memory.resize(MemorySize);
     Regs.resize(RegNum);
   }
+
+  Instruction Decode(int Instruction) const;
 
   // Gay
   void Compute();

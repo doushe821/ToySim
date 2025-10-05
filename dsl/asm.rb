@@ -14,11 +14,11 @@ dsl_obj = dsl do
   usat x1, x2, 1
   ld x1, 32.(x2)
   st x1, 32.(x2)
-
   stp x1, x2, 32.(x3)
   j gay
   label gay
   syscall
+
   # Halls of awaiting:
   # syscall exit
 end
