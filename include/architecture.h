@@ -91,6 +91,7 @@ enum OperandTypes {
 struct Operand {
   int Value;
   EncodingPartCode OperandType;
+  unsigned Size;
 };
 
 const std::unordered_map<const InstructionTypesCodes, const std::vector<EncodingPart>> InstructionTypes { // TODO change name
@@ -154,8 +155,8 @@ private:
   unsigned PC = 0;
   // architecture described operations:
   int Reverse(int Val);
-  int signExtend(int Val);
-  int saturateUnsigned(int Val, int N);
+  int signExtend(int Val, int N);
+  int saturateUnsigned(unsigned Val, unsigned N);
 
   // Gay
 

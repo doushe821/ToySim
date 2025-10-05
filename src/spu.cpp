@@ -1,11 +1,12 @@
-#include <any>
 #include <cassert>
-#include <iostream>
 #include <vector>
-#include <memory>
-#include <fstream>
 
 #include "architecture.h"
+
+// TODO: syscall support
+// TODO: labels for cond. branches
+// TODO: semantics layouts
+// TODO: threaded code
 
 namespace ToySim {
   void SPU::Compute() {
@@ -62,7 +63,7 @@ namespace ToySim {
           auto &imm = Ops[0].Value;
           auto &rt = Regs[Ops[1].Value];
           auto &rs = Regs[Ops[2].Value];
-          rt = (rs < signExtend(imm));
+          rt = (rs < signExtend(imm, Ops[0].Size));
           PC += 4;
           break;
         } case OpCodeLD: {
@@ -73,7 +74,7 @@ namespace ToySim {
           auto &imm = Ops[0].Value;
           auto &rt = Regs[Ops[1].Value];
           auto &base = Regs[Ops[2].Value];
-          rt = Memory[base + signExtend(imm)];
+          rt = Memory[base + signExtend(imm, Ops[0].Size)];
           PC += 4;
           break;
         } case OpCodeSYSCALL: {
@@ -101,7 +102,7 @@ namespace ToySim {
           auto &rt2 = Regs[Ops[1].Value];
           auto &rt1 = Regs[Ops[2].Value];
           auto &base = Regs[Ops[3].Value];
-          auto addr = base + signExtend(imm);
+          auto addr = base + signExtend(imm, Ops[0].Size);
           Memory[addr] = rt1;
           Memory[addr + 1] = rt2; // TODO char memory
           PC += 4;
@@ -114,7 +115,7 @@ namespace ToySim {
           auto &imm = Ops[0].Value;
           auto &rt = Regs[Ops[1].Value];
           auto &rs = Regs[Ops[2].Value];
-          auto target = signExtend(imm | 0b00);
+          auto target = signExtend(imm | 0b00, Ops[0].Size);
           auto cond = rs != rt;
           if (cond) {
             PC += target;
@@ -141,7 +142,7 @@ namespace ToySim {
           auto &imm = Ops[0].Value;
           auto &rt = Regs[Ops[1].Value];
           auto &rs = Regs[Ops[2].Value];
-          auto target = signExtend(imm | 0b00);
+          auto target = signExtend(imm | 0b00, Ops[0].Size);
           auto cond = rs == rt;
           if (cond) {
             PC += target;
@@ -178,7 +179,7 @@ namespace ToySim {
           auto &imm = Ops[0].Value;
           auto &rt = Regs[Ops[1].Value];
           auto &base = Regs[Ops[2].Value];
-          Memory[base + signExtend(imm)] = rt; 
+          Memory[base + signExtend(imm, Ops[0].Size)] = rt; 
           PC += 4;
           break;
         } default: {
@@ -207,7 +208,7 @@ namespace ToySim {
       }
 
       auto Value = (BinInstruction >> CurrentBit) & (1 << Part.PartSize);
-      Operands.push_back({Value, Part.PartCode});
+      Operands.push_back({Value, Part.PartCode, Part.PartSize});
       CurrentBit += Part.PartSize;
     }
 
@@ -215,7 +216,7 @@ namespace ToySim {
     return DecodedInstruction;
   }
 
-  int SPU::Reverse(int Val) {
+  int SPU::Reverse(int Val) { // TODO for N bits
     Val = (Val & 0xFFFF0000) >> 16 | (Val & 0x0000FFFF) << 16;
     Val = (Val & 0xFF00FF00) >> 8  | (Val & 0x00FF00FF) << 8;
     Val = (Val & 0xF0F0F0F0) >> 4  | (Val & 0x0F0F0F0F) << 4;
@@ -223,10 +224,20 @@ namespace ToySim {
     Val = (Val & 0xAAAAAAAA) >> 1  | (Val & 0x55555555) << 1;
     return Val;
   }
-  int SPU::signExtend(int Val) {
-    return Val; // TODO
+
+  int SPU::signExtend(int Val, int N) {
+    if (Val & (1 << (N - 1))) {
+      int Mask = ~((1 << N) - 1);
+      Val |= Mask;
+    }
+    return Val;
   }
-  int SPU::saturateUnsigned(int Val, int N) {
-    return Val; // TODO
+
+  int SPU::saturateUnsigned(unsigned Val, unsigned N) {
+    unsigned Limit = (1 << N) - 1;
+    if (Val > Limit) {
+      Val = Limit;
+    }
+    return Val;
   }
 } // namespace ToySim
