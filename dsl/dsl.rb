@@ -1,4 +1,5 @@
 # TODO rip & tear
+# find 26
 module Kernel 
   undef :syscall
 end
@@ -31,14 +32,16 @@ class DSL
         [:rd,     5, 11],
         [:funct5, 5, 6],
         [:opcode, 6, 0 ]
-      ]
+      ],
+      order: [0, 2, 1]
     },
     j: {
       opcode: OPCODES['j'],
       fields: [
         [:opcode, 6, 26],
         [:index, 26, 0]
-      ]
+      ], 
+      order: [0]
     },
     movn: {
       opcode: OPCODES['movn'],
@@ -51,7 +54,8 @@ class DSL
         [:rd, 5, 11],
         [:funct5, 5, 6],
         [:opcode, 6, 0]
-      ]
+      ], 
+      order: [0, 2, 1]
     },
     rbit: {
       opcode: OPCODES['rbit'],
@@ -59,11 +63,12 @@ class DSL
       funct6: 0b000000,
       fields:[
         [:funct6, 6, 26],
-        [:rs, 5, 21],
+        [:rd, 5, 21],
         [:rs, 5, 16],
         [:funct10, 10, 6],
         [:opcode, 6, 0]
-      ]
+      ],
+      order: [1, 0]
     },
     slti: {
       opcode: OPCODES['slti'],
@@ -73,7 +78,8 @@ class DSL
         [:rs, 5, 21],
         [:rt, 5, 16],
         [:imm, 16, 0]
-      ]
+      ], 
+      order: [2, 1, 0]
     },
     ld: {
       opcode: OPCODES['ld'],
@@ -82,7 +88,8 @@ class DSL
         [:base, 5, 21],
         [:rt, 5, 16],
         [:offset, 16, 0]
-      ]
+      ],
+      order: [2, 1, 0]
     },
     syscall: {
       opcode: OPCODES['syscall'],
@@ -92,7 +99,8 @@ class DSL
         [:funct6, 6, 26],
         [:funct20, 20, 6],
         [:opcode, 6, 0]
-      ]
+      ], 
+      order: [] # Might die
     },
     cbit: {
       opcode: OPCODES['cbit'],
@@ -103,7 +111,8 @@ class DSL
         [:rs, 5, 16],
         [:imm, 5, 11],
         [:funct11, 11, 0]
-      ]
+      ],
+      order: [2, 1, 0]
     },
     stp: {
       opcode: OPCODES['stp'],
@@ -113,7 +122,8 @@ class DSL
         [:rt1, 5, 16],
         [:rt2, 5, 11],
         [:offset, 11, 0]
-      ]
+      ],
+      order: [3, 1, 0, 2]
     },
     bne: {
       opcode: OPCODES['bne'],
@@ -121,8 +131,9 @@ class DSL
         [:opcode, 6, 26], 
         [:rs, 5, 21],
         [:rt, 5, 16],
-        [:imm, 16, 0]
-      ]
+        [:offset, 16, 0]
+      ],
+      order: [2, 1, 0]
     },
     usat: {
       opcode: OPCODES['usat'],
@@ -133,7 +144,8 @@ class DSL
         [:rs, 5, 16],
         [:imm, 5, 11],
         [:funct11, 11, 0]
-      ]
+      ],
+      order: [2, 1, 0]
     },
     beq: {
       opcode: OPCODES['beq'],
@@ -141,8 +153,9 @@ class DSL
         [:opcode, 6, 26],
         [:rs, 5, 21],
         [:rd, 5, 16],
-        [:imm, 16, 0]
-      ]
+        [:offset, 16, 0]
+      ],
+      order: [2, 1, 0]
     },
     bdep: {
       opcode: OPCODES['bdep'],
@@ -155,7 +168,8 @@ class DSL
         [:rs2, 5, 11],
         [:funct5, 5, 6],
         [:opcode, 6, 0]
-      ]
+      ],
+      order: [2, 1, 0]
     },
     st: {
       opcode: OPCODES['st'],
@@ -164,10 +178,10 @@ class DSL
         [:base, 5, 21],
         [:rt, 5, 16],
         [:offset, 16, 0]
-      ]
+      ],
+      order: [2, 0, 1]
     },
     label: {
-      
     }
   }.freeze
 
@@ -179,7 +193,6 @@ class DSL
   end
 
   def method_missing(method_name, *args, &block)
-    puts "stiny winky #{method_name}"
     if method_name.to_s.match?(REGISTER_PATTERN)
       if args.any? || block
         super
@@ -187,10 +200,8 @@ class DSL
         method_name
       end
     elsif OPCODES.key?(method_name.to_s)
-      puts "winy winky #{method_name}"
       handle_instruction_call(method_name, *args)
     elsif !args.any? && method_name.to_s.match?(LABEL_NAME_PATTERN) # That's a label
-      puts "stiny pinky #{method_name}"
       method_name
     else
       raise "Lexer failure, undefined token"
@@ -212,13 +223,12 @@ class DSL
 
       label_info[:address] = @PC
       label_info[:pending_offsets].each do |instr_pc, offset_size, offset_start| # Back patching
-        # TODO backpatching
-        relative_offset = @PC - instr_pc # TODO might be wrong xd
+        relative_offset = @PC - instr_pc # TODO
         offset_mask = (1 << offset_size) - 1
         relative_offset = relative_offset & offset_mask
         relative_offset = relative_offset << offset_start
         @buffer[instr_pc / 4] |= relative_offset
-        puts "Backpatch completed: #{label_name}: 0x#{@buffer[instr_pc / 4].to_s(16).rjust(8, '0').upcase}"
+        puts "Backpatch completed: #{label_name}: 0x#{@buffer[instr_pc / 4].to_s}"
       end
 
     else 
@@ -231,11 +241,18 @@ class DSL
 
   def handle_instruction_call(instruction_name, *operands)
     layout = INSTRUCTION_LAYOUTS[instruction_name]
-    puts instruction_name
     unless layout
       raise NoMethodError, "Undefined instruction: #{instruction_name}"
     end
     operands = operands.flatten
+    puts operands
+    puts "kekeke"
+    # rearranged = indices_array.map { |index| elements_array[index] }
+    operands = layout[:order].map { |index| operands[index] }
+    puts operands
+    puts "kekeke"
+    operands = operands.reverse
+    puts operands
     args_map = {}
     operand_index = 0
     layout[:fields].each do |field_type, size, start_bit|
@@ -248,12 +265,12 @@ class DSL
         end
         args_map[field_type] = reg_num
         operand_index += 1
-      when :imm5, :imm, :offset
+      when :imm5, :imm
         imm_value = operands[operand_index]
         # TODO imm validation
         args_map[field_type] = imm_value
         operand_index += 1
-      when :index
+      when :index, :offset
         if operands[operand_index].is_a?(Integer) # Jump in Imm
           imm_value = operands[operand_index]
           args_map[field_type] = imm_value

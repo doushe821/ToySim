@@ -1,5 +1,9 @@
 #include <cassert>
+#include <iterator>
 #include <vector>
+#include <iostream>
+#include <ranges>
+#include <concepts>
 
 #include "architecture.h"
 
@@ -11,8 +15,9 @@
 namespace ToySim {
   void SPU::Compute() {
     assert(!BinInstructions.empty());
-    auto BinInstruction = BinInstructions[0];
-    while (true) {
+    while (PC / 4 <= BinInstructions.size() - 1) { // TODO exit condition
+      auto BinInstruction = BinInstructions[PC / 4];
+      std::cout << "hoot\n";
       Instruction DecodedInstruction = Decode(BinInstruction);
       auto &Ops = DecodedInstruction.Operands; 
       switch (DecodedInstruction.OpCode) {
@@ -190,32 +195,49 @@ namespace ToySim {
   }
 
   Instruction SPU::Decode(int BinInstruction) const {
+    std::cout << "Decoding instruction: " << BinInstruction << '\n';
     OpCodes OpCode = (OpCodes)(BinInstruction & High6bitMask); // TODO comment types
     if (OpCode == 0) {
       OpCode = (OpCodes)(BinInstruction & Low6bitMask); // TODO comment types
     }
+    std::cout << "Opcode = " << OpCode << '\n';
     auto Layout = Layouts.at(OpCode);
 
     auto BinLayout = Layout.second; // TODO struct maybe
 
-    // TODO check ariphmetics if it bugs
+    // TODO check ariphmetics if it bugs (it actually bugged)
     std::vector<Operand> Operands;
     auto CurrentBit{0};
-    for (auto &Part: BinLayout) {
-      if (Part.PartCode == OpCodeEncoding || Part.PartCode == ZeroEncoding) {
-        CurrentBit += Part.PartSize;
+    for (auto Part = BinLayout.rbegin(); Part < BinLayout.rend(); Part = std::next(Part)) {
+      std::cout << "rawr " << Part->PartCode << ", " << Part->PartSize << '\n';
+      if (Part->PartCode == OpCodeEncoding || Part->PartCode == ZeroEncoding) {
+        CurrentBit += Part->PartSize;
         continue;
       }
-
-      auto Value = (BinInstruction >> CurrentBit) & (1 << Part.PartSize);
-      Operands.push_back({Value, Part.PartCode, Part.PartSize});
-      CurrentBit += Part.PartSize;
+      std::cout << CurrentBit << '\n';
+      auto Value = (BinInstruction >> CurrentBit) & ((1 << Part->PartSize) - 1);
+      Operands.push_back({Value, Part->PartCode, Part->PartSize});
+      CurrentBit += Part->PartSize;
     }
 
     Instruction DecodedInstruction = {OpCode, Operands};
+    std::cout << "Instruction decoded.\n";
+    std::cout << "Operands: ";
+    for (auto &Op : Operands) {
+      std::cout << Op.Value << " ";
+    }
+    std::cout << '\n';
     return DecodedInstruction;
   }
 
+  void SPU::RegDump() const {
+    std::cout << "[PC] = " << PC << '\n';
+    for (unsigned RegCounter = 0; RegCounter < Regs.size(); ++RegCounter) {
+      std::cout << "[x" << RegCounter << "] = " << Regs[RegCounter] << '\n';
+    }
+  }
+
+// Architecture-defined functions:
   int SPU::Reverse(int Val) { // TODO for N bits
     Val = (Val & 0xFFFF0000) >> 16 | (Val & 0x0000FFFF) << 16;
     Val = (Val & 0xFF00FF00) >> 8  | (Val & 0x00FF00FF) << 8;
@@ -240,4 +262,5 @@ namespace ToySim {
     }
     return Val;
   }
+
 } // namespace ToySim

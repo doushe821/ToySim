@@ -4,14 +4,13 @@ project (cache CXX)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR})
 set(EXECUTABLE Sim)
 add_executable (${EXECUTABLE}
-    src/main.cpp
-    src/assembler.cpp
-    src/spu.cpp
+    sim/src/main.cpp
+    sim/src/spu.cpp
 )
 
 target_include_directories (${EXECUTABLE}
     PRIVATE
-    include
+    sim/include
 )
 
 target_link_libraries (${EXECUTABLE}
@@ -20,7 +19,7 @@ target_link_libraries (${EXECUTABLE}
 
 target_compile_features (${EXECUTABLE}
     PRIVATE
-        cxx_std_17
+        cxx_std_20
 )
 
 target_compile_options (${EXECUTABLE}

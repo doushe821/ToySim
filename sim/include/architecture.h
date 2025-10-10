@@ -5,6 +5,7 @@
 #include <cassert>
 #include <fstream>
 #include <limits>
+#include <iostream>
 namespace ToySim {
 // Gay
 
@@ -81,7 +82,7 @@ enum LocalOpcodes {
 
 // Valid.
 
-const unsigned Low6bitMask = 63;
+const unsigned Low6bitMask = 0x3f;
 const unsigned High6bitMask = 0xfc000000;
 
 enum OperandTypes {
@@ -109,7 +110,7 @@ enum OpCodes {
   OpCodeJ = 0b111001,
   OpCodeMOVN = 0b111011,
   OpCodeRBIT = 0b010110,
-  OpCodeADD = 0b110000,
+  OpCodeADD = 0b011000,
   OpCodeSLTI = 0b110101,
   OpCodeLD = 0b010010,
   OpCodeSYSCALL = 0b011001,
@@ -165,13 +166,21 @@ public:
   SPU(const std::string& FileName, unsigned RegNum = 32, unsigned MemorySize = 1024) : RegNum(RegNum), MemorySize(MemorySize) {
     std::ifstream File(FileName, std::ios::binary);
     if (!File.is_open()) {
-        assert(0);
+        assert(!"Cannot open bin file\n");
     }
     
-    int Instruction;
-    while (File >> Instruction) {
-      BinInstructions.push_back(Instruction);
-    }
+    File.seekg(0, std::ios::end);
+    std::streamsize Size = File.tellg();
+    File.seekg(0, std::ios::beg);
+
+    assert(Size % sizeof(int) == 0);
+    BinInstructions.resize(Size/4);
+    File.read(reinterpret_cast<char*>(BinInstructions.data()), Size);
+    //int Instruction;
+    //while (File >> Instruction) {
+    //  std::cout << "Gathered instruction from file\n";
+    //  BinInstructions.push_back(Instruction);
+    //}
     File.close();
 
     if (RegNum == 0 || MemorySize == 0) {
@@ -183,11 +192,11 @@ public:
   }
 
   Instruction Decode(int Instruction) const;
-
-  // Gay
+  
   void Compute();
-  void StateDump() const;
   void RegDump() const;
+  // Gay
+  void StateDump() const;
   void MemoryDump() const;
 };
 
