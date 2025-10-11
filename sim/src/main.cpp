@@ -1,10 +1,12 @@
 #include "architecture.h"
 #include <iostream>
-int main() {
-  ToySim::SPU Sim {"output.bin"};
+int main(int argc, char** argv) {
+  std::vector<int> InitMemory = {1, -1, std::atoi(argv[1])};
+  ToySim::SPU Sim {"output.bin", InitMemory, 32, 4};
   std::cout << "SPU initialized\n";
-  Sim.Compute();
+  Sim.memoryDump();
+  Sim.compute();
   std::cout << "Computed\n";
-  Sim.RegDump();
+  Sim.regDump(8);
   return 0;
 }

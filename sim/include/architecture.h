@@ -155,7 +155,7 @@ private:
   std::vector<int> Regs;
   unsigned PC = 0;
   // architecture described operations:
-  int Reverse(int Val);
+  int reverse(int Val);
   int signExtend(int Val, int N);
   int saturateUnsigned(unsigned Val, unsigned N);
 
@@ -163,7 +163,7 @@ private:
 
 public:
   // Valid.
-  SPU(const std::string& FileName, unsigned RegNum = 32, unsigned MemorySize = 1024) : RegNum(RegNum), MemorySize(MemorySize) {
+  SPU(const std::string& FileName, std::vector<int> &Arguments, unsigned RegNum = 32, unsigned MemorySize = 1024) : RegNum(RegNum), MemorySize(MemorySize) {
     std::ifstream File(FileName, std::ios::binary);
     if (!File.is_open()) {
         assert(!"Cannot open bin file\n");
@@ -187,17 +187,18 @@ public:
       assert(0);
     }
 
+    Memory = Arguments; // FIXME for now address of arguments' list always starts with zero.
     Memory.resize(MemorySize);
     Regs.resize(RegNum);
   }
 
-  Instruction Decode(int Instruction) const;
+  Instruction decode(int Instruction) const;
   
-  void Compute();
-  void RegDump() const;
+  void compute();
+  void regDump(unsigned N = 32) const;
   // Gay
-  void StateDump() const;
-  void MemoryDump() const;
+  void memoryDump() const;
+  void stateDump() const;
 };
 
 } // namespace ToySim

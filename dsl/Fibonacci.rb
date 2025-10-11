@@ -1,0 +1,42 @@
+require_relative 'dsl_wrapper'
+include DSLWrapper
+
+
+# In order for program to work, memory should look like that:
+# [1, -1, N]
+# Starting address is 0x00
+dsl_obj = dsl do
+
+  ld x4, 0.(x0) # true condition
+  ld x2, 8.(x0) # N
+  slti x5, x2, 0
+  beq x5, x4, exx
+
+  ld x1, 0.(x0)
+  ld x3, 4.(x0) # should be -1 in memory, that's for decrementation
+  slti x5, x2, 1
+  beq x5, x4, exx
+  slti x5, x2, 2
+  beq x5, x4, exx
+
+  ld x7, 0.(x0)
+  ld x8, 0.(x0) 
+  # x1 = F(n), x7 = F(n-1), x8 = F(n-2)
+  add x2, x2, x3
+  add x2, x2, x3
+  label floop # calculation loop
+
+  add x1, x7, x8
+  movn x8, x7, x4
+  movn x7, x1, x4
+
+  add x2, x2, x3 # decrement  
+  bne x2, x0, floop
+
+  label exx
+  ld x0, 12.(x0) # exit opcode
+  syscall
+
+end
+
+dsl_obj.dump_buffer_to_file("output.bin")

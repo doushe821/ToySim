@@ -2,8 +2,6 @@
 #include <iterator>
 #include <vector>
 #include <iostream>
-#include <ranges>
-#include <concepts>
 
 #include "architecture.h"
 
@@ -13,12 +11,11 @@
 // TODO: threaded code
 
 namespace ToySim {
-  void SPU::Compute() {
+  void SPU::compute() {
     assert(!BinInstructions.empty());
     while (PC / 4 <= BinInstructions.size() - 1) { // TODO exit condition
       auto BinInstruction = BinInstructions[PC / 4];
-      std::cout << "hoot\n";
-      Instruction DecodedInstruction = Decode(BinInstruction);
+      Instruction DecodedInstruction = decode(BinInstruction);
       auto &Ops = DecodedInstruction.Operands; 
       switch (DecodedInstruction.OpCode) {
         case OpCodeJ: {
@@ -45,7 +42,7 @@ namespace ToySim {
           assert(Ops[1].OperandType == RegEncoding);
           auto &rs = Regs[Ops[0].Value];
           auto &rd = Regs[Ops[1].Value];
-          auto ReversedReg = Reverse(rs);
+          auto ReversedReg = reverse(rs);
           rd = ReversedReg;
           PC += 4;
           break;
@@ -79,7 +76,9 @@ namespace ToySim {
           auto &imm = Ops[0].Value;
           auto &rt = Regs[Ops[1].Value];
           auto &base = Regs[Ops[2].Value];
-          rt = Memory[base + signExtend(imm, Ops[0].Size)];
+          std::cout << "Base reg = " << Ops[2].Value << '\n';
+          std::cout << "Base = " << base << '\n';
+          rt = Memory[base + signExtend(imm, Ops[0].Size)/4];
           PC += 4;
           break;
         } case OpCodeSYSCALL: {
@@ -191,12 +190,13 @@ namespace ToySim {
           assert(!"Unsupported OpCode\n");
         }
       }
+      regDump(8);
     }
   }
 
-  Instruction SPU::Decode(int BinInstruction) const {
+  Instruction SPU::decode(int BinInstruction) const {
     std::cout << "Decoding instruction: " << BinInstruction << '\n';
-    OpCodes OpCode = (OpCodes)(BinInstruction & High6bitMask); // TODO comment types
+    OpCodes OpCode = (OpCodes)((BinInstruction & High6bitMask) >> 26); // TODO comment types
     if (OpCode == 0) {
       OpCode = (OpCodes)(BinInstruction & Low6bitMask); // TODO comment types
     }
@@ -209,12 +209,10 @@ namespace ToySim {
     std::vector<Operand> Operands;
     auto CurrentBit{0};
     for (auto Part = BinLayout.rbegin(); Part < BinLayout.rend(); Part = std::next(Part)) {
-      std::cout << "rawr " << Part->PartCode << ", " << Part->PartSize << '\n';
       if (Part->PartCode == OpCodeEncoding || Part->PartCode == ZeroEncoding) {
         CurrentBit += Part->PartSize;
         continue;
       }
-      std::cout << CurrentBit << '\n';
       auto Value = (BinInstruction >> CurrentBit) & ((1 << Part->PartSize) - 1);
       Operands.push_back({Value, Part->PartCode, Part->PartSize});
       CurrentBit += Part->PartSize;
@@ -230,15 +228,26 @@ namespace ToySim {
     return DecodedInstruction;
   }
 
-  void SPU::RegDump() const {
+  void SPU::memoryDump() const {
+    std::cout << "### SPU memory dump: ###\n";
+    for (unsigned I = 0; I < Memory.size(); ++I) {
+      std::cout << "[" << I << "]: " << Memory[I] << '\n';
+    }
+    std::cout << std::endl;
+  }
+
+  void SPU::regDump(unsigned N) const {
     std::cout << "[PC] = " << PC << '\n';
-    for (unsigned RegCounter = 0; RegCounter < Regs.size(); ++RegCounter) {
+    if (N > RegNum) {
+      N = RegNum;
+    }
+    for (unsigned RegCounter = 0; RegCounter < N; ++RegCounter) {
       std::cout << "[x" << RegCounter << "] = " << Regs[RegCounter] << '\n';
     }
   }
 
 // Architecture-defined functions:
-  int SPU::Reverse(int Val) { // TODO for N bits
+  int SPU::reverse(int Val) { // TODO for N bits
     Val = (Val & 0xFFFF0000) >> 16 | (Val & 0x0000FFFF) << 16;
     Val = (Val & 0xFF00FF00) >> 8  | (Val & 0x00FF00FF) << 8;
     Val = (Val & 0xF0F0F0F0) >> 4  | (Val & 0x0F0F0F0F) << 4;

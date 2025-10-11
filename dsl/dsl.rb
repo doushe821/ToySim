@@ -79,7 +79,7 @@ class DSL
         [:rt, 5, 16],
         [:imm, 16, 0]
       ], 
-      order: [2, 1, 0]
+      order: [2, 0, 1]
     },
     ld: {
       opcode: OPCODES['ld'],
@@ -89,7 +89,7 @@ class DSL
         [:rt, 5, 16],
         [:offset, 16, 0]
       ],
-      order: [2, 1, 0]
+      order: [2, 0, 1]
     },
     syscall: {
       opcode: OPCODES['syscall'],
@@ -245,14 +245,12 @@ class DSL
       raise NoMethodError, "Undefined instruction: #{instruction_name}"
     end
     operands = operands.flatten
-    puts operands
-    puts "kekeke"
+    puts "Operands flatten: #{operands}"
     # rearranged = indices_array.map { |index| elements_array[index] }
     operands = layout[:order].map { |index| operands[index] }
-    puts operands
-    puts "kekeke"
+    puts "Operands in order: #{operands}"
     operands = operands.reverse
-    puts operands
+    puts "Operands reversed: #{operands}"
     args_map = {}
     operand_index = 0
     layout[:fields].each do |field_type, size, start_bit|
