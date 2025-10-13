@@ -17,8 +17,7 @@ namespace ToySim {
       auto BinInstruction = BinInstructions[PC / 4];
       Instruction DecodedInstruction = decode(BinInstruction);
       auto &Ops = DecodedInstruction.Operands; 
-      InstructionTable[DecodedInstruction.OpCode](DecodedInstruction, Regs, Memory, Ops, PC);
-      //regDump(8);
+      InstructionTable[DecodedInstruction.OpCode](DecodedInstruction, Regs, Memory, Ops, PC); // TODO SPU state
     }
   }
 
@@ -36,7 +35,7 @@ namespace ToySim {
     // TODO check ariphmetics if it bugs (it actually bugged)
     std::vector<Operand> Operands;
     auto CurrentBit{0};
-    for (auto Part = BinLayout.rbegin(); Part < BinLayout.rend(); Part = std::next(Part)) {
+    for (auto Part = BinLayout.rbegin(); Part != BinLayout.rend(); ++Part) { // != for generalization
       if (Part->PartCode == OpCodeEncoding || Part->PartCode == ZeroEncoding) {
         CurrentBit += Part->PartSize;
         continue;

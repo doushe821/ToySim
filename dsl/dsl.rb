@@ -4,7 +4,8 @@ end
 class DSL
   REGISTER_PATTERN = /\A[xif][0-9]+\z/
   LABEL_NAME_PATTERN = /\A[a-zA-Z_][a-zA-Z0-9_]*\z/
-  REG_MAP = {
+
+  REG_MAP = { # Generate
     'x0' => 0, 'x1' => 1, 'x2' => 2, 'x3' => 3, 'x4' => 4, 'x5' => 5, 'x6' => 6, 'x7' => 7,
     'x8' => 8, 'x9' => 9, 'x10' => 10, 'x11' => 11, 'x12' => 12, 'x13' => 13, 'x14' => 14, 'x15' => 15,
     'x16' => 16, 'x17' => 17, 'x18' => 18, 'x19' => 19, 'x20' => 20, 'x21' => 21, 'x22' => 22, 'x23' => 23,
@@ -187,10 +188,10 @@ class DSL
   def initialize
     @buffer = []
     @PC = 0
-    @labels = {}
+    @labels = {} # New class
   end
 
-  def method_missing(method_name, *args, &block)
+  def method_missing(method_name, *args, &block) # check for symbol return
     if method_name.to_s.match?(REGISTER_PATTERN)
       if args.any?
         super
@@ -207,7 +208,6 @@ class DSL
   end
 
   def label(label_name)
-    # TODO namecheck maybe
     if @labels.key?(label_name)
       label_info = @labels[label_name]
 

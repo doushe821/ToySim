@@ -2,9 +2,11 @@ require_relative 'dsl_wrapper'
 include DSLWrapper
 
 
-# In order for program to work, memory should look like that:
-# [1, -1, N]
-# Starting address is 0x00
+# In order for program to work, memory should look like that for now:
+# [1, -1, N, ExitCode]
+# First two is for arihmetics, N is number of elems in Fib sequence,
+# ExitCode is ExitCode.
+# Starting address is always 0x00 (FIXME)
 dsl_obj = dsl do
 
   ld x4, 0.(x0) # true condition
@@ -39,5 +41,6 @@ dsl_obj = dsl do
   syscall
 
 end
-
-dsl_obj.dump_buffer_to_file("output.bin")
+# TODO symbols for labels
+# TODO mega wrapper
+dsl_obj.dump_buffer_to_file("../output.bin")
