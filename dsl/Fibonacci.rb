@@ -34,7 +34,8 @@ dsl_obj = dsl do
   bne x2, x0, floop
 
   label exx
-  ld x0, 12.(x0) # exit opcode
+  ld x8, 12.(x0) # exit opcode
+  movn x0, x1, x1
   syscall
 
 end

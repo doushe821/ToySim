@@ -100,7 +100,7 @@ class DSL
         [:funct20, 20, 6],
         [:opcode, 6, 0]
       ], 
-      order: [] # Might die
+      order: []
     },
     cbit: {
       opcode: OPCODES['cbit'],

@@ -128,6 +128,11 @@ const std::unordered_map<const InstructionTypesCodes, const std::vector<Encoding
   {SysType, {{ZeroEncoding}, {ImmEncoding, 20}, {OpCodeEncoding}}}
 };
 
+
+enum SyscallCodeTable {
+  EXIT,
+};
+
 enum OpCodes {
   OpCodeJ = 0b111001,
   OpCodeMOVN = 0b111011,
@@ -174,184 +179,189 @@ static void HandleInvalidOpCode(ToySim::Instruction &DecodedInstruction, std::ve
   std::cout << "Invalid OpCode on PC = " << PC << ", skipping instruction\n";
 }
 
-using InstructionHandler = void(*)(ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC);
-  constexpr static std::array<InstructionHandler, OpCodeMax> initInstructionTable() {
-    std::array<InstructionHandler, OpCodeMax> TempTable;
-    std::fill(TempTable.begin(), TempTable.end(), &HandleInvalidOpCode);
+using SyscallHandler = void(*)(std::vector<int> &Regs, std::vector<int> &Memory);
+constexpr static std::array<SyscallHandler, 1> SyscallTable = {[](std::vector<int> &Regs, std::vector<int> &Memory) { std::cout << "\033[1;32mExited with code " << Regs[0] << "\033[37m\n"; }};
 
-    TempTable[OpCodeJ] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
-      assert(Ops.size() == 1);
-      assert(Ops[0].OperandType == ImmEncoding);
-      PC += Ops[0].Value;
-    };
-    TempTable[OpCodeMOVN] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
-      assert(Ops.size() == 3);
-      assert(Ops[0].OperandType == RegEncoding);
-      auto &rd = Regs[DecodedInstruction.Operands[0].Value];
-      assert(Ops[1].OperandType == RegEncoding);
-      auto &rt = Regs[DecodedInstruction.Operands[1].Value];
-      assert(Ops[2].OperandType == RegEncoding);
-      auto &rs = Regs[DecodedInstruction.Operands[2].Value];
-      if (rt != 0) {
-        rd = rs;
-      }
-      PC += 4;
-    };
-    TempTable[OpCodeRBIT] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
-      assert(Ops.size() == 2);
-      assert(Ops[0].OperandType == RegEncoding);
-      assert(Ops[1].OperandType == RegEncoding);
-      auto &rs = Regs[Ops[0].Value];
-      auto &rd = Regs[Ops[1].Value];
-      auto ReversedReg = reverse(rs);
-      rd = ReversedReg;
-      PC += 4;
-    };
-    TempTable[OpCodeADD] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
-      assert(Ops.size() == 3);
-      assert(Ops[0].OperandType == RegEncoding);
-      assert(Ops[1].OperandType == RegEncoding);
-      assert(Ops[2].OperandType == RegEncoding);
-      auto &rd = Regs[Ops[0].Value];
-      auto &rt = Regs[Ops[1].Value];
-      auto &rs = Regs[Ops[2].Value];
-      rd = rs + rt;
-      PC += 4;
-    };
-    TempTable[OpCodeSLTI] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
-      assert(Ops.size() == 3);
-      assert(Ops[0].OperandType == ImmEncoding);
-      assert(Ops[1].OperandType == RegEncoding);
-      assert(Ops[2].OperandType == RegEncoding);
-      auto &imm = Ops[0].Value;
-      auto &rt = Regs[Ops[1].Value];
-      auto &rs = Regs[Ops[2].Value];
-      rt = (rs < signExtend(imm, Ops[0].Size));
-      PC += 4;
-    };
-    TempTable[OpCodeLD] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
-      assert(Ops.size() == 3);
-      assert(Ops[0].OperandType == ImmEncoding);
-      assert(Ops[1].OperandType == RegEncoding);
-      assert(Ops[2].OperandType == RegEncoding);
-      auto &imm = Ops[0].Value;
-      auto &rt = Regs[Ops[1].Value];
-      auto &base = Regs[Ops[2].Value];
-      std::cout << "Base reg = " << Ops[2].Value << '\n';
-      std::cout << "Base = " << base << '\n';
-      rt = Memory[base + signExtend(imm, Ops[0].Size)/4];
-      PC += 4;
-    };
-    TempTable[OpCodeSYSCALL] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
-      // TODO
-      PC += 4;
-    };
-    TempTable[OpCodeCBIT] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
-      assert(Ops.size() == 3);
-      assert(Ops[0].OperandType == ImmEncoding);
-      assert(Ops[1].OperandType == RegEncoding);
-      assert(Ops[2].OperandType == RegEncoding);
-      auto &imm = Ops[0].Value;
-      auto &rs = Regs[Ops[1].Value];
-      auto &rd = Regs[Ops[2].Value];
-      rd = rs & (~(1 << (imm - 1)));
-      PC += 4;
-    };
-    TempTable[OpCodeSTP] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
-      assert(Ops.size() == 4);
-      assert(Ops[0].OperandType == ImmEncoding);
-      assert(Ops[1].OperandType == RegEncoding);
-      assert(Ops[2].OperandType == RegEncoding);
-      assert(Ops[3].OperandType == RegEncoding);
-      auto &imm = Ops[0].Value;
-      auto &rt2 = Regs[Ops[1].Value];
-      auto &rt1 = Regs[Ops[2].Value];
-      auto &base = Regs[Ops[3].Value];
-      auto addr = base + signExtend(imm, Ops[0].Size);
-      Memory[addr] = rt1;
-      Memory[addr + 1] = rt2; // TODO char memory
-      PC += 4;
-    };
-    TempTable[OpCodeBNE] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
-      assert(Ops.size() == 3);
-      assert(Ops[0].OperandType == ImmEncoding);
-      assert(Ops[1].OperandType == RegEncoding);
-      assert(Ops[2].OperandType == RegEncoding);
-      auto &imm = Ops[0].Value;
-      auto &rt = Regs[Ops[1].Value];
-      auto &rs = Regs[Ops[2].Value];
-      auto target = signExtend(imm | 0b00, Ops[0].Size);
-      auto cond = rs != rt;
-      if (cond) {
-        PC += target;
-      } else {
-        PC += 4;
-      }
-    };
-    TempTable[OpCodeUSAT] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
-      assert(Ops.size() == 3);
-      assert(Ops[0].OperandType == ImmEncoding);
-      assert(Ops[1].OperandType == RegEncoding);
-      assert(Ops[2].OperandType == RegEncoding);
-      auto &imm = Ops[0].Value;
-      auto &rd = Regs[Ops[1].Value];
-      auto &rs = Regs[Ops[2].Value];
-      rd = saturateUnsigned(rs, imm);
-      PC += 4;
-    };
-    TempTable[OpCodeBEQ] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
-      assert(Ops.size() == 3);
-      assert(Ops[0].OperandType == ImmEncoding);
-      assert(Ops[1].OperandType == RegEncoding);
-      assert(Ops[2].OperandType == RegEncoding);
-      auto &imm = Ops[0].Value;
-      auto &rt = Regs[Ops[1].Value];
-      auto &rs = Regs[Ops[2].Value];
-      auto target = signExtend(imm | 0b00, Ops[0].Size);
-      auto cond = rs == rt;
-      if (cond) {
-        PC += target;
-      } else {
-        PC += 4;
-      }
-    };
-    TempTable[OpCodeBDEP] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
-      assert(Ops.size() == 3);
-      assert(Ops[0].OperandType == RegEncoding);
-      assert(Ops[1].OperandType == RegEncoding);
-      assert(Ops[2].OperandType == RegEncoding);
-      auto &rs2 = Ops[0].Value;
-      auto &rs1 = Regs[Ops[1].Value];
-      auto &rd = Regs[Ops[2].Value];
-      rd = 0;
-      auto DepCount {0};
-      for (unsigned Bit = 0; Bit < 32; ++Bit) { // TODO little optimization is doable
-        auto Masked = rs2 & (1 << Bit);
-        if (Masked) {
-          if (rs1 & (1 << DepCount)) {
-            rd |= Masked;
-          }
-          ++DepCount;
-        }
-      }
-      PC += 4;
-    };
-    TempTable[OpCodeST] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
-      assert(Ops.size() == 3);
-      assert(Ops[0].OperandType == ImmEncoding);
-      assert(Ops[1].OperandType == RegEncoding);
-      assert(Ops[2].OperandType == RegEncoding);
-      auto &imm = Ops[0].Value;
-      auto &rt = Regs[Ops[1].Value];
-      auto &base = Regs[Ops[2].Value];
-      Memory[base + signExtend(imm, Ops[0].Size)] = rt; 
-      PC += 4;
-    };
-    return TempTable;
+using InstructionHandler = void(*)(ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC);
+constexpr static std::array<InstructionHandler, OpCodeMax> initInstructionTable() {
+  std::array<InstructionHandler, OpCodeMax> TempTable;
+  std::fill(TempTable.begin(), TempTable.end(), &HandleInvalidOpCode);
+
+  TempTable[OpCodeJ] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
+    assert(Ops.size() == 1);
+    assert(Ops[0].OperandType == ImmEncoding);
+    PC += Ops[0].Value;
   };
+  TempTable[OpCodeMOVN] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
+    assert(Ops.size() == 3);
+    assert(Ops[0].OperandType == RegEncoding);
+    auto &rd = Regs[DecodedInstruction.Operands[0].Value];
+    assert(Ops[1].OperandType == RegEncoding);
+    auto &rt = Regs[DecodedInstruction.Operands[1].Value];
+    assert(Ops[2].OperandType == RegEncoding);
+    auto &rs = Regs[DecodedInstruction.Operands[2].Value];
+    if (rt != 0) {
+      rd = rs;
+    }
+    PC += 4;
+  };
+  TempTable[OpCodeRBIT] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
+    assert(Ops.size() == 2);
+    assert(Ops[0].OperandType == RegEncoding);
+    assert(Ops[1].OperandType == RegEncoding);
+    auto &rs = Regs[Ops[0].Value];
+    auto &rd = Regs[Ops[1].Value];
+    auto ReversedReg = reverse(rs);
+    rd = ReversedReg;
+    PC += 4;
+  };
+  TempTable[OpCodeADD] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
+    assert(Ops.size() == 3);
+    assert(Ops[0].OperandType == RegEncoding);
+    assert(Ops[1].OperandType == RegEncoding);
+    assert(Ops[2].OperandType == RegEncoding);
+    auto &rd = Regs[Ops[0].Value];
+    auto &rt = Regs[Ops[1].Value];
+    auto &rs = Regs[Ops[2].Value];
+    rd = rs + rt;
+    PC += 4;
+  };
+  TempTable[OpCodeSLTI] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
+    assert(Ops.size() == 3);
+    assert(Ops[0].OperandType == ImmEncoding);
+    assert(Ops[1].OperandType == RegEncoding);
+    assert(Ops[2].OperandType == RegEncoding);
+    auto &imm = Ops[0].Value;
+    auto &rt = Regs[Ops[1].Value];
+    auto &rs = Regs[Ops[2].Value];
+    rt = (rs < signExtend(imm, Ops[0].Size));
+    PC += 4;
+  };
+  TempTable[OpCodeLD] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
+    assert(Ops.size() == 3);
+    assert(Ops[0].OperandType == ImmEncoding);
+    assert(Ops[1].OperandType == RegEncoding);
+    assert(Ops[2].OperandType == RegEncoding);
+    auto &imm = Ops[0].Value;
+    auto &rt = Regs[Ops[1].Value];
+    auto &base = Regs[Ops[2].Value];
+    std::cout << "Base reg = " << Ops[2].Value << '\n';
+    std::cout << "Base = " << base << '\n';
+    rt = Memory[base + signExtend(imm, Ops[0].Size)/4];
+    PC += 4;
+  };
+  TempTable[OpCodeSYSCALL] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
+    std::cout << "sys has been called\n";
+    SyscallTable[Regs[8]](Regs, Memory);
+    PC += 4;
+  };
+  TempTable[OpCodeCBIT] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
+    assert(Ops.size() == 3);
+    assert(Ops[0].OperandType == ImmEncoding);
+    assert(Ops[1].OperandType == RegEncoding);
+    assert(Ops[2].OperandType == RegEncoding);
+    auto &imm = Ops[0].Value;
+    auto &rs = Regs[Ops[1].Value];
+    auto &rd = Regs[Ops[2].Value];
+    rd = rs & (~(1 << (imm - 1)));
+    PC += 4;
+  };
+  TempTable[OpCodeSTP] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
+    assert(Ops.size() == 4);
+    assert(Ops[0].OperandType == ImmEncoding);
+    assert(Ops[1].OperandType == RegEncoding);
+    assert(Ops[2].OperandType == RegEncoding);
+    assert(Ops[3].OperandType == RegEncoding);
+    auto &imm = Ops[0].Value;
+    auto &rt2 = Regs[Ops[1].Value];
+    auto &rt1 = Regs[Ops[2].Value];
+    auto &base = Regs[Ops[3].Value];
+    auto addr = base + signExtend(imm, Ops[0].Size);
+    Memory[addr] = rt1;
+    Memory[addr + 1] = rt2; // TODO char memory
+    PC += 4;
+  };
+  TempTable[OpCodeBNE] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
+    assert(Ops.size() == 3);
+    assert(Ops[0].OperandType == ImmEncoding);
+    assert(Ops[1].OperandType == RegEncoding);
+    assert(Ops[2].OperandType == RegEncoding);
+    auto &imm = Ops[0].Value;
+    auto &rt = Regs[Ops[1].Value];
+    auto &rs = Regs[Ops[2].Value];
+    auto target = signExtend(imm | 0b00, Ops[0].Size);
+    auto cond = rs != rt;
+    if (cond) {
+      PC += target;
+    } else {
+      PC += 4;
+    }
+  };
+  TempTable[OpCodeUSAT] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
+    assert(Ops.size() == 3);
+    assert(Ops[0].OperandType == ImmEncoding);
+    assert(Ops[1].OperandType == RegEncoding);
+    assert(Ops[2].OperandType == RegEncoding);
+    auto &imm = Ops[0].Value;
+    auto &rd = Regs[Ops[1].Value];
+    auto &rs = Regs[Ops[2].Value];
+    rd = saturateUnsigned(rs, imm);
+    PC += 4;
+  };
+  TempTable[OpCodeBEQ] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
+    assert(Ops.size() == 3);
+    assert(Ops[0].OperandType == ImmEncoding);
+    assert(Ops[1].OperandType == RegEncoding);
+    assert(Ops[2].OperandType == RegEncoding);
+    auto &imm = Ops[0].Value;
+    auto &rt = Regs[Ops[1].Value];
+    auto &rs = Regs[Ops[2].Value];
+    auto target = signExtend(imm | 0b00, Ops[0].Size);
+    auto cond = rs == rt;
+    if (cond) {
+      PC += target;
+    } else {
+      PC += 4;
+    }
+  };
+  TempTable[OpCodeBDEP] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
+    assert(Ops.size() == 3);
+    assert(Ops[0].OperandType == RegEncoding);
+    assert(Ops[1].OperandType == RegEncoding);
+    assert(Ops[2].OperandType == RegEncoding);
+    auto &rs2 = Ops[0].Value;
+    auto &rs1 = Regs[Ops[1].Value];
+    auto &rd = Regs[Ops[2].Value];
+    rd = 0;
+    auto DepCount {0};
+    for (unsigned Bit = 0; Bit < 32; ++Bit) { // TODO little optimization is doable
+      auto Masked = rs2 & (1 << Bit);
+      if (Masked) {
+        if (rs1 & (1 << DepCount)) {
+          rd |= Masked;
+        }
+        ++DepCount;
+      }
+    }
+    PC += 4;
+  };
+  TempTable[OpCodeST] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
+    assert(Ops.size() == 3);
+    assert(Ops[0].OperandType == ImmEncoding);
+    assert(Ops[1].OperandType == RegEncoding);
+    assert(Ops[2].OperandType == RegEncoding);
+    auto &imm = Ops[0].Value;
+    auto &rt = Regs[Ops[1].Value];
+    auto &base = Regs[Ops[2].Value];
+    Memory[base + signExtend(imm, Ops[0].Size)] = rt; 
+    PC += 4;
+  };
+  return TempTable;
+};
 
 class SPU {
 private:
+
   std::vector<int> BinInstructions;
   const unsigned RegNum = 32;
   const unsigned MemorySize = 1024;
@@ -377,11 +387,6 @@ public:
     assert(Size % sizeof(int) == 0);
     BinInstructions.resize(Size/4);
     File.read(reinterpret_cast<char*>(BinInstructions.data()), Size);
-    //int Instruction;
-    //while (File >> Instruction) {
-    //  std::cout << "Gathered instruction from file\n";
-    //  BinInstructions.push_back(Instruction);
-    //}
     File.close();
 
     if (RegNum == 0 || MemorySize == 0) {

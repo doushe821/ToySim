@@ -7,6 +7,6 @@ int main(int argc, char** argv) {
   Sim.memoryDump();
   Sim.compute();
   std::cout << "Computed\n";
-  Sim.regDump(8);
+  Sim.regDump(9);
   return 0;
 }
