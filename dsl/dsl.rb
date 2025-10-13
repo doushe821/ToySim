@@ -246,8 +246,7 @@ class DSL
     end
     operands = operands.flatten
     puts "Operands flatten: #{operands}"
-    # rearranged = indices_array.map { |index| elements_array[index] }
-    operands = layout[:order].map { |index| operands[index] }
+    operands = layout[:order].map { |index| operands[index] } # operands[i] = operands[order[i]]
     puts "Operands in order: #{operands}"
     operands = operands.reverse
     puts "Operands reversed: #{operands}"
