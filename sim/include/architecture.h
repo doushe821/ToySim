@@ -5,7 +5,6 @@
 #include <cassert>
 #include <array>
 #include <fstream>
-#include <limits>
 #include <iostream>
 namespace ToySim {
 
@@ -176,14 +175,13 @@ static const std::unordered_map<const OpCodes, std::pair<InstructionTypesCodes, 
 
 static const unsigned OpCodeMax = 64;
 
-
 static void HandleInvalidOpCode(ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
   std::cout << "Invalid OpCode on PC = " << PC << ", skipping instruction\n";
 }
 
 // TO BE GENERATED
 using SyscallHandler = void(*)(std::vector<int> &Regs, std::vector<int> &Memory, unsigned &PC);
-constexpr static std::array<SyscallHandler, 1> SyscallTable = {[](std::vector<int> &Regs, std::vector<int> &Memory, unsigned &PC) { std::cout << "\033[1;32mExited with code " << Regs[0] << "\033[37m\n"; PC = UINT16_MAX; }};
+constexpr static std::array<SyscallHandler, 1> SyscallTable = {[](std::vector<int> &Regs, std::vector<int> &Memory, unsigned &PC) { std::cout << "\033[1;32mExited with code " << Regs[0] << "\033[37m\n"; PC = UINT32_MAX - 4; }};
 
 using InstructionHandler = void(*)(ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC);
 constexpr static std::array<InstructionHandler, OpCodeMax> initInstructionTable() {

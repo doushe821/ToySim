@@ -1,5 +1,3 @@
-# TODO rip & tear
-# find 26
 module Kernel 
   undef :syscall
 end
@@ -194,22 +192,18 @@ class DSL
 
   def method_missing(method_name, *args, &block)
     if method_name.to_s.match?(REGISTER_PATTERN)
-      if args.any? || block
+      if args.any?
         super
       else
         method_name
       end
     elsif OPCODES.key?(method_name.to_s)
       handle_instruction_call(method_name, *args)
-    elsif !args.any? && method_name.to_s.match?(LABEL_NAME_PATTERN) # That's a label
+    elsif !args.any? && method_name.to_s.match?(LABEL_NAME_PATTERN)
       method_name
     else
       raise "Lexer failure, undefined token"
     end
-  end
-
-  def respond_to_missing?(method_name, include_private = false)
-    method_name.to_s.match?(REGISTER_PATTERN) || INSTRUCTION_LAYOUTS.key?(method_name) || super
   end
 
   def label(label_name)
@@ -278,7 +272,7 @@ class DSL
             label_info = @labels[label_name]
             if label_info[:address] == nil
 
-              @labels[label_name][:pending_offsets] << [@PC, size, start_bit] # TODO learn how to update correctly
+              @labels[label_name][:pending_offsets] << [@PC, size, start_bit]
 
               args_map[field_type] = 0
               operand_index += 1
@@ -301,14 +295,11 @@ class DSL
       end
     end
 
-    # Encode the instruction based on the layout and arguments
     encoded_instruction = encode_instruction(layout, args_map)
 
-    # Write the encoded instruction to the buffer
     @buffer << encoded_instruction
     puts "Encoded #{instruction_name} (#{operands.join(', ')}): 0x#{encoded_instruction.to_s(16).rjust(8, '0').upcase}"
     @PC += 4
-    # Optional: Return the encoded instruction or the DSL object for chaining
     encoded_instruction
   end
 
@@ -329,7 +320,6 @@ class DSL
       # Shift to the correct position
       shifted_value = masked_value << start_bit
 
-      # Add value to instrucition
       instruction |= shifted_value
     end
 
@@ -341,7 +331,7 @@ class DSL
   def dump_buffer_to_file(filename)
     File.open(filename, 'wb') do |file|
       @buffer.each do |instruction_int|
-        file.write [instruction_int].pack('V') # V is for lil endian
+        file.write [instruction_int].pack('V')
       end
     end
     puts "Buffer dumped to #{filename}. Buffer size: #{@buffer.length} instructions."
