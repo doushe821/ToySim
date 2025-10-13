@@ -18,17 +18,17 @@ namespace ToySim {
       Instruction DecodedInstruction = decode(BinInstruction);
       auto &Ops = DecodedInstruction.Operands; 
       InstructionTable[DecodedInstruction.OpCode](DecodedInstruction, Regs, Memory, Ops, PC);
-      regDump(8);
+      //regDump(8);
     }
   }
 
   Instruction SPU::decode(int BinInstruction) const {
-    std::cout << "Decoding instruction: " << BinInstruction << '\n';
+    //std::cout << "Decoding instruction: " << BinInstruction << '\n';
     OpCodes OpCode = (OpCodes)((BinInstruction & High6bitMask) >> 26); // TODO comment types
     if (OpCode == 0) {
       OpCode = (OpCodes)(BinInstruction & Low6bitMask); // TODO comment types
     }
-    std::cout << "Opcode = " << OpCode << '\n';
+    //std::cout << "Opcode = " << OpCode << '\n';
     auto Layout = Layouts.at(OpCode);
 
     auto BinLayout = Layout.second; // TODO struct maybe
@@ -47,12 +47,12 @@ namespace ToySim {
     }
 
     Instruction DecodedInstruction = {OpCode, Operands};
-    std::cout << "Instruction decoded.\n";
-    std::cout << "Operands: ";
-    for (auto &Op : Operands) {
-      std::cout << Op.Value << " ";
-    }
-    std::cout << '\n';
+    // std::cout << "Instruction decoded.\n";
+    // std::cout << "Operands: ";
+  //  for (auto &Op : Operands) {
+      //std::cout << Op.Value << " ";
+//    }
+    //std::cout << '\n';
     return DecodedInstruction;
   }
 
@@ -61,7 +61,7 @@ namespace ToySim {
     for (unsigned I = 0; I < Memory.size(); ++I) {
       std::cout << "[" << I << "]: " << Memory[I] << '\n';
     }
-    std::cout << std::endl;
+    std::cout << "########################\n\n";
   }
 
   void SPU::regDump(unsigned N) const {

@@ -245,13 +245,13 @@ constexpr static std::array<InstructionHandler, OpCodeMax> initInstructionTable(
     auto &imm = Ops[0].Value;
     auto &rt = Regs[Ops[1].Value];
     auto &base = Regs[Ops[2].Value];
-    std::cout << "Base reg = " << Ops[2].Value << '\n';
-    std::cout << "Base = " << base << '\n';
+    // std::cout << "Base reg = " << Ops[2].Value << '\n';
+    // std::cout << "Base = " << base << '\n';
     rt = Memory[base + signExtend(imm, Ops[0].Size)/4];
     PC += 4;
   };
   TempTable[OpCodeSYSCALL] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
-    std::cout << "sys has been called\n";
+    // std::cout << "sys has been called\n";
     SyscallTable[Regs[8]](Regs, Memory);
     PC += 4;
   };
