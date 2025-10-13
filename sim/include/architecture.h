@@ -1,9 +1,11 @@
 #pragma once
+#include <cstdint>
 #include <unordered_map>
 #include <vector>
 #include <cassert>
 #include <array>
 #include <fstream>
+#include <limits>
 #include <iostream>
 namespace ToySim {
 
@@ -118,13 +120,13 @@ struct Operand {
 };
 
 const std::unordered_map<const InstructionTypesCodes, const std::vector<EncodingPart>> InstructionTypes { // TODO change name
-  {JType, {{OpCodeEncoding}, {ImmEncoding, 26}}},
-  {BType, {{OpCodeEncoding}, {RegEncoding}, {RegEncoding}, {ImmEncoding, 16}}},
-  {EType, {{OpCodeEncoding}, {RegEncoding}, {RegEncoding}, {ImmEncoding, 5}, {ZeroEncoding, 11}}},
-  {DSType, {{OpCodeEncoding, {RegEncoding}, {RegEncoding}, {RegEncoding}, {ImmEncoding, 11}}}},
-  {SType, {{OpCodeEncoding, {RegEncoding}, {RegEncoding}, {ImmEncoding, 16}}}},
-  {CType, {{ZeroEncoding}, {RegEncoding}, {RegEncoding}, {RegEncoding}, {ZeroEncoding, 5}, {OpCodeEncoding}}},
-  {CDType, {{ZeroEncoding}, {RegEncoding}, {RegEncoding}, {ZeroEncoding, 10}, {OpCodeEncoding}}},
+  {JType,   {{OpCodeEncoding}, {ImmEncoding, 26}}},
+  {BType,   {{OpCodeEncoding}, {RegEncoding}, {RegEncoding}, {ImmEncoding, 16}}},
+  {EType,   {{OpCodeEncoding}, {RegEncoding}, {RegEncoding}, {ImmEncoding, 5}, {ZeroEncoding, 11}}},
+  {DSType,  {{OpCodeEncoding, {RegEncoding}, {RegEncoding}, {RegEncoding}, {ImmEncoding, 11}}}},
+  {SType,   {{OpCodeEncoding, {RegEncoding}, {RegEncoding}, {ImmEncoding, 16}}}},
+  {CType,   {{ZeroEncoding}, {RegEncoding}, {RegEncoding}, {RegEncoding}, {ZeroEncoding, 5}, {OpCodeEncoding}}},
+  {CDType,  {{ZeroEncoding}, {RegEncoding}, {RegEncoding}, {ZeroEncoding, 10}, {OpCodeEncoding}}},
   {SysType, {{ZeroEncoding}, {ImmEncoding, 20}, {OpCodeEncoding}}}
 };
 
@@ -134,20 +136,20 @@ enum SyscallCodeTable {
 };
 
 enum OpCodes {
-  OpCodeJ = 0b111001,
-  OpCodeMOVN = 0b111011,
-  OpCodeRBIT = 0b010110,
-  OpCodeADD = 0b011000,
-  OpCodeSLTI = 0b110101,
-  OpCodeLD = 0b010010,
+  OpCodeJ       = 0b111001,
+  OpCodeMOVN    = 0b111011,
+  OpCodeRBIT    = 0b010110,
+  OpCodeADD     = 0b011000,
+  OpCodeSLTI    = 0b110101,
+  OpCodeLD      = 0b010010,
   OpCodeSYSCALL = 0b011001,
-  OpCodeCBIT = 0b111110,
-  OpCodeSTP = 0b101010,
-  OpCodeBNE = 0b110111,
-  OpCodeUSAT = 0b100011,
-  OpCodeBEQ = 0b001011,
-  OpCodeBDEP = 0b001100,
-  OpCodeST = 0b100101,
+  OpCodeCBIT    = 0b111110,
+  OpCodeSTP     = 0b101010,
+  OpCodeBNE     = 0b110111,
+  OpCodeUSAT    = 0b100011,
+  OpCodeBEQ     = 0b001011,
+  OpCodeBDEP    = 0b001100,
+  OpCodeST      = 0b100101,
 };
 struct Instruction {
   OpCodes OpCode;
@@ -156,20 +158,20 @@ struct Instruction {
 
 
 static const std::unordered_map<const OpCodes, std::pair<InstructionTypesCodes, const std::vector<EncodingPart>>> Layouts = {
-{OpCodeJ, {JType, InstructionTypes.at(JType)}},
-{OpCodeMOVN, {CType, InstructionTypes.at(CType)}},
-{OpCodeRBIT, {CDType, InstructionTypes.at(CDType)}},
-{OpCodeADD, {CType, InstructionTypes.at(CType)}},
-{OpCodeSLTI, {BType, InstructionTypes.at(BType)}},
-{OpCodeLD, {BType, InstructionTypes.at(BType)}},
+{OpCodeJ,       {JType, InstructionTypes.at(JType)}},
+{OpCodeMOVN,    {CType, InstructionTypes.at(CType)}},
+{OpCodeRBIT,    {CDType, InstructionTypes.at(CDType)}},
+{OpCodeADD,     {CType, InstructionTypes.at(CType)}},
+{OpCodeSLTI,    {BType, InstructionTypes.at(BType)}},
+{OpCodeLD,      {BType, InstructionTypes.at(BType)}},
 {OpCodeSYSCALL, {SysType, InstructionTypes.at(SysType)}},
-{OpCodeCBIT, {EType, InstructionTypes.at(EType)}}, 
-{OpCodeSTP, {DSType, InstructionTypes.at(DSType)}},
-{OpCodeBNE, {BType, InstructionTypes.at(BType)}},
-{OpCodeUSAT, {EType, InstructionTypes.at(EType)}},
-{OpCodeBEQ, {BType, InstructionTypes.at(BType)}},
-{OpCodeBDEP, {CType, InstructionTypes.at(CType)}},
-{OpCodeST, {BType, InstructionTypes.at(BType)}}
+{OpCodeCBIT,    {EType, InstructionTypes.at(EType)}}, 
+{OpCodeSTP,     {DSType, InstructionTypes.at(DSType)}},
+{OpCodeBNE,     {BType, InstructionTypes.at(BType)}},
+{OpCodeUSAT,   {EType, InstructionTypes.at(EType)}},
+{OpCodeBEQ,    {BType, InstructionTypes.at(BType)}},
+{OpCodeBDEP,   {CType, InstructionTypes.at(CType)}},
+{OpCodeST,     {BType, InstructionTypes.at(BType)}}
 };
 
 static const unsigned OpCodeMax = 64;
@@ -179,8 +181,9 @@ static void HandleInvalidOpCode(ToySim::Instruction &DecodedInstruction, std::ve
   std::cout << "Invalid OpCode on PC = " << PC << ", skipping instruction\n";
 }
 
-using SyscallHandler = void(*)(std::vector<int> &Regs, std::vector<int> &Memory);
-constexpr static std::array<SyscallHandler, 1> SyscallTable = {[](std::vector<int> &Regs, std::vector<int> &Memory) { std::cout << "\033[1;32mExited with code " << Regs[0] << "\033[37m\n"; }};
+// TO BE GENERATED
+using SyscallHandler = void(*)(std::vector<int> &Regs, std::vector<int> &Memory, unsigned &PC);
+constexpr static std::array<SyscallHandler, 1> SyscallTable = {[](std::vector<int> &Regs, std::vector<int> &Memory, unsigned &PC) { std::cout << "\033[1;32mExited with code " << Regs[0] << "\033[37m\n"; PC = UINT16_MAX; }};
 
 using InstructionHandler = void(*)(ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC);
 constexpr static std::array<InstructionHandler, OpCodeMax> initInstructionTable() {
@@ -252,7 +255,7 @@ constexpr static std::array<InstructionHandler, OpCodeMax> initInstructionTable(
   };
   TempTable[OpCodeSYSCALL] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
     // std::cout << "sys has been called\n";
-    SyscallTable[Regs[8]](Regs, Memory);
+    SyscallTable[Regs[8]](Regs, Memory, PC);
     PC += 4;
   };
   TempTable[OpCodeCBIT] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
@@ -358,6 +361,7 @@ constexpr static std::array<InstructionHandler, OpCodeMax> initInstructionTable(
   };
   return TempTable;
 };
+// TO BE GENERATED
 
 class SPU {
 private:
@@ -368,8 +372,6 @@ private:
   std::vector<int> Memory;
   std::vector<int> Regs;
   unsigned PC = 0;
-
-
 
   static constexpr std::array<InstructionHandler, OpCodeMax> InstructionTable = initInstructionTable();
 

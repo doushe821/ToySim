@@ -1,12 +1,13 @@
 #include "architecture.h"
-#include <iostream>
+#include <cassert>
 int main(int argc, char** argv) {
   std::vector<int> InitMemory = {1, -1, std::atoi(argv[1])};
   ToySim::SPU Sim {"output.bin", InitMemory, 32, 4};
-  //std::cout << "SPU initialized\n";
-  Sim.memoryDump();
+  if (argc > 2) {
+    if (std::atoi(argv[2]) == 1) { // TODO cli11
+      Sim.memoryDump();
+    }
+  }
   Sim.compute();
-  //std::cout << "Computed\n";
-  //Sim.regDump(9);
   return 0;
 }
