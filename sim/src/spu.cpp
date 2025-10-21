@@ -22,12 +22,10 @@ namespace ToySim {
   }
 
   Instruction SPU::decode(int BinInstruction) const {
-    //std::cout << "Decoding instruction: " << BinInstruction << '\n';
     OpCodes OpCode = (OpCodes)((BinInstruction & High6bitMask) >> 26); // TODO comment types
     if (OpCode == 0) {
       OpCode = (OpCodes)(BinInstruction & Low6bitMask); // TODO comment types
     }
-    //std::cout << "Opcode = " << OpCode << '\n';
     auto Layout = Layouts.at(OpCode);
 
     auto BinLayout = Layout.second; // TODO struct maybe
@@ -46,12 +44,6 @@ namespace ToySim {
     }
 
     Instruction DecodedInstruction = {OpCode, Operands};
-    // std::cout << "Instruction decoded.\n";
-    // std::cout << "Operands: ";
-  //  for (auto &Op : Operands) {
-      //std::cout << Op.Value << " ";
-//    }
-    //std::cout << '\n';
     return DecodedInstruction;
   }
 

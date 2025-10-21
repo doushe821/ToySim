@@ -8,15 +8,17 @@
 #include <iostream>
 namespace ToySim {
 
+// architecture defined constants:
+static const unsigned kToyISARegNum = 32;
 
 // architecture dependant operations:
 // TODO for N-bit
 static int reverse(int Val) {
   Val = (Val & 0xFFFF0000) >> 16 | (Val & 0x0000FFFF) << 16;
-  Val = (Val & 0xFF00FF00) >> 8  | (Val & 0x00FF00FF) << 8;
-  Val = (Val & 0xF0F0F0F0) >> 4  | (Val & 0x0F0F0F0F) << 4;
-  Val = (Val & 0xCCCCCCCC) >> 2  | (Val & 0x33333333) << 2;
-  Val = (Val & 0xAAAAAAAA) >> 1  | (Val & 0x55555555) << 1;
+  Val = (Val & 0xFF00FF00) >> 8  | (Val & 0x00FF00FF) << 8 ;
+  Val = (Val & 0xF0F0F0F0) >> 4  | (Val & 0x0F0F0F0F) << 4 ;
+  Val = (Val & 0xCCCCCCCC) >> 2  | (Val & 0x33333333) << 2 ;
+  Val = (Val & 0xAAAAAAAA) >> 1  | (Val & 0x55555555) << 1 ;
   return Val;
 }
 
@@ -178,28 +180,28 @@ static const std::unordered_map<OpCodes, std::pair<InstructionTypesCodes, const 
 
 static const unsigned OpCodeMax = 64;
 
-static void HandleInvalidOpCode(ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
+static void HandleInvalidOpCode(ToySim::Instruction &DecodedInstruction, std::vector<unsigned> &Regs, std::vector<unsigned> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
   std::cout << "Invalid OpCode on PC = " << PC << ", skipping instruction\n";
 }
 
 // TO BE GENERATED
-using SyscallHandler = void(*)(std::vector<int> &Regs, std::vector<int> &Memory, unsigned &PC);
-constexpr static std::array<SyscallHandler, 1> SyscallTable = {[](std::vector<int> &Regs, std::vector<int> &Memory, unsigned &PC) { std::cout << "\033[1;32mExited with code " << Regs[0] << "\033[37m\n"; PC = UINT32_MAX - 4; }}; // FIXME finished
+using SyscallHandler = void(*)(std::vector<unsigned> &Regs, std::vector<unsigned> &Memory, unsigned &PC);
+constexpr static std::array<SyscallHandler, 1> SyscallTable = {[](std::vector<unsigned> &Regs, std::vector<unsigned> &Memory, unsigned &PC) { std::cout << "\033[1;32mExited with code " << Regs[0] << "\033[37m\n"; PC = UINT32_MAX - 4; }}; // FIXME finished
 
 // FIXME threads share memory
 // TODO unsigned register, unsigned memory
-using InstructionHandler = void(*)(ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC); // SPU as argument
+using InstructionHandler = void(*)(ToySim::Instruction &DecodedInstruction, std::vector<unsigned> &Regs, std::vector<unsigned> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC); // SPU as argument
 constexpr static std::array<InstructionHandler, OpCodeMax> initInstructionTable() {
   // TODO separate class, inherit from std::array
   std::array<InstructionHandler, OpCodeMax> TempTable;
   std::fill(TempTable.begin(), TempTable.end(), &HandleInvalidOpCode);
 // TODO memory as separate structure
-  TempTable[OpCodeJ] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
+  TempTable[OpCodeJ] = [](ToySim::Instruction &DecodedInstruction, std::vector<unsigned> &Regs, std::vector<unsigned> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
     assert(Ops.size() == 1);
     assert(Ops[0].OperandType == ImmEncoding);
     PC += Ops[0].Value;
   };
-  TempTable[OpCodeMOVN] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
+  TempTable[OpCodeMOVN] = [](ToySim::Instruction &DecodedInstruction, std::vector<unsigned> &Regs, std::vector<unsigned> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
     assert(Ops.size() == 3);
     assert(Ops[0].OperandType == RegEncoding);
     auto &rd = Regs[DecodedInstruction.Operands[0].Value];
@@ -212,7 +214,7 @@ constexpr static std::array<InstructionHandler, OpCodeMax> initInstructionTable(
     }
     PC += 4;
   };
-  TempTable[OpCodeRBIT] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
+  TempTable[OpCodeRBIT] = [](ToySim::Instruction &DecodedInstruction, std::vector<unsigned> &Regs, std::vector<unsigned> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
     assert(Ops.size() == 2);
     assert(Ops[0].OperandType == RegEncoding);
     assert(Ops[1].OperandType == RegEncoding);
@@ -222,7 +224,7 @@ constexpr static std::array<InstructionHandler, OpCodeMax> initInstructionTable(
     rd = ReversedReg;
     PC += 4;
   };
-  TempTable[OpCodeADD] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
+  TempTable[OpCodeADD] = [](ToySim::Instruction &DecodedInstruction, std::vector<unsigned> &Regs, std::vector<unsigned> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
     assert(Ops.size() == 3);
     assert(Ops[0].OperandType == RegEncoding);
     assert(Ops[1].OperandType == RegEncoding);
@@ -233,7 +235,7 @@ constexpr static std::array<InstructionHandler, OpCodeMax> initInstructionTable(
     rd = rs + rt;
     PC += 4;
   };
-  TempTable[OpCodeSLTI] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
+  TempTable[OpCodeSLTI] = [](ToySim::Instruction &DecodedInstruction, std::vector<unsigned> &Regs, std::vector<unsigned> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
     assert(Ops.size() == 3);
     assert(Ops[0].OperandType == ImmEncoding);
     assert(Ops[1].OperandType == RegEncoding);
@@ -244,7 +246,7 @@ constexpr static std::array<InstructionHandler, OpCodeMax> initInstructionTable(
     rt = (rs < signExtend(imm, Ops[0].Size));
     PC += 4;
   };
-  TempTable[OpCodeLD] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
+  TempTable[OpCodeLD] = [](ToySim::Instruction &DecodedInstruction, std::vector<unsigned> &Regs, std::vector<unsigned> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
     assert(Ops.size() == 3);
     assert(Ops[0].OperandType == ImmEncoding);
     assert(Ops[1].OperandType == RegEncoding);
@@ -257,12 +259,12 @@ constexpr static std::array<InstructionHandler, OpCodeMax> initInstructionTable(
     rt = Memory[base + signExtend(imm, Ops[0].Size)/4];
     PC += 4;
   };
-  TempTable[OpCodeSYSCALL] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
+  TempTable[OpCodeSYSCALL] = [](ToySim::Instruction &DecodedInstruction, std::vector<unsigned> &Regs, std::vector<unsigned> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
     // std::cout << "sys has been called\n";
     SyscallTable[Regs[8]](Regs, Memory, PC);
     PC += 4;
   };
-  TempTable[OpCodeCBIT] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
+  TempTable[OpCodeCBIT] = [](ToySim::Instruction &DecodedInstruction, std::vector<unsigned> &Regs, std::vector<unsigned> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
     assert(Ops.size() == 3);
     assert(Ops[0].OperandType == ImmEncoding);
     assert(Ops[1].OperandType == RegEncoding);
@@ -273,7 +275,7 @@ constexpr static std::array<InstructionHandler, OpCodeMax> initInstructionTable(
     rd = rs & (~(1 << (imm - 1)));
     PC += 4;
   };
-  TempTable[OpCodeSTP] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
+  TempTable[OpCodeSTP] = [](ToySim::Instruction &DecodedInstruction, std::vector<unsigned> &Regs, std::vector<unsigned> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
     assert(Ops.size() == 4);
     assert(Ops[0].OperandType == ImmEncoding);
     assert(Ops[1].OperandType == RegEncoding);
@@ -288,7 +290,7 @@ constexpr static std::array<InstructionHandler, OpCodeMax> initInstructionTable(
     Memory[addr + 1] = rt2; // TODO char memory
     PC += 4;
   };
-  TempTable[OpCodeBNE] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
+  TempTable[OpCodeBNE] = [](ToySim::Instruction &DecodedInstruction, std::vector<unsigned> &Regs, std::vector<unsigned> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
     assert(Ops.size() == 3);
     assert(Ops[0].OperandType == ImmEncoding);
     assert(Ops[1].OperandType == RegEncoding);
@@ -304,7 +306,7 @@ constexpr static std::array<InstructionHandler, OpCodeMax> initInstructionTable(
       PC += 4;
     }
   };
-  TempTable[OpCodeUSAT] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
+  TempTable[OpCodeUSAT] = [](ToySim::Instruction &DecodedInstruction, std::vector<unsigned> &Regs, std::vector<unsigned> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
     assert(Ops.size() == 3);
     assert(Ops[0].OperandType == ImmEncoding);
     assert(Ops[1].OperandType == RegEncoding);
@@ -315,7 +317,7 @@ constexpr static std::array<InstructionHandler, OpCodeMax> initInstructionTable(
     rd = saturateUnsigned(rs, imm);
     PC += 4;
   };
-  TempTable[OpCodeBEQ] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
+  TempTable[OpCodeBEQ] = [](ToySim::Instruction &DecodedInstruction, std::vector<unsigned> &Regs, std::vector<unsigned> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
     assert(Ops.size() == 3);
     assert(Ops[0].OperandType == ImmEncoding);
     assert(Ops[1].OperandType == RegEncoding);
@@ -331,7 +333,7 @@ constexpr static std::array<InstructionHandler, OpCodeMax> initInstructionTable(
       PC += 4;
     }
   };
-  TempTable[OpCodeBDEP] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
+  TempTable[OpCodeBDEP] = [](ToySim::Instruction &DecodedInstruction, std::vector<unsigned> &Regs, std::vector<unsigned> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
     assert(Ops.size() == 3);
     assert(Ops[0].OperandType == RegEncoding);
     assert(Ops[1].OperandType == RegEncoding);
@@ -352,7 +354,7 @@ constexpr static std::array<InstructionHandler, OpCodeMax> initInstructionTable(
     }
     PC += 4;
   };
-  TempTable[OpCodeST] = [](ToySim::Instruction &DecodedInstruction, std::vector<int> &Regs, std::vector<int> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
+  TempTable[OpCodeST] = [](ToySim::Instruction &DecodedInstruction, std::vector<unsigned> &Regs, std::vector<unsigned> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
     assert(Ops.size() == 3);
     assert(Ops[0].OperandType == ImmEncoding);
     assert(Ops[1].OperandType == RegEncoding);
@@ -373,18 +375,38 @@ private:
 
   // TODO Instructions in memory
   // TODO SPU State struct
-  std::vector<int> BinInstructions;
-  const unsigned RegNum = 32;
-  const unsigned MemorySize = 1024;
-  std::vector<int> Memory;
-  std::vector<int> Regs;
-  unsigned PC = 0;
-
+  // Memory speces
+  static const unsigned MemorySize = 1024;
+  unsigned ProgramStartAddress;
+  unsigned ArgumentsStartAddress;
+  // memory specs
+  std::vector<unsigned> BinInstructions;
+  
   // TODO separate class
   static constexpr std::array<InstructionHandler, OpCodeMax> InstructionTable = initInstructionTable();
 
+  
+  struct SPUState {
+    std::array<unsigned, kToyISARegNum> Regs;
+    unsigned PC;
+  };
+
+  enum class SegmentPermission {
+    Execute,
+    Read,
+    Write,
+  };
+
+  struct SPUMemory {
+    std::array<char, MemorySize> Memory;
+    std::unordered_map<unsigned, char> Segments;
+  };
+
+  SPUMemory RAM;
+  SPUState State = {{}, 0};
+
 public:
-  SPU(const std::string& FileName, std::vector<int> &Arguments, unsigned RegNum = 32, unsigned MemorySize = 1024) : RegNum(RegNum), MemorySize(MemorySize) {
+  SPU(const std::string& FileName, std::vector<unsigned> &Arguments) {
     std::ifstream File(FileName, std::ios::binary);
     if (!File.is_open()) {
         assert(!"Cannot open bin file\n");
@@ -399,14 +421,14 @@ public:
     File.read(reinterpret_cast<char*>(BinInstructions.data()), Size);
     File.close();
 
-    if (RegNum == 0 || MemorySize == 0) {
+    // Not enough memory to load program
+    if (MemorySize <= Size) {
       assert(0);
     }
+    ArgumentsStartAddress = 0;
+    ProgramStartAddress = Arguments.size() * sizeof(unsigned);
     // TODO memory parameters that are defined by cli (again, CLI11 is needed)
-    Memory = Arguments; // FIXME for now address of arguments' list always starts with zero. 
-    Memory.resize(MemorySize);
-    Regs.resize(RegNum);
-    // FIXME constant reg size
+    // FIXME for now address of arguments' list always starts with zero. 
   }
 
   Instruction decode(int Instruction) const;

@@ -1,10 +1,10 @@
 #include "architecture.h"
 #include <cassert>
 int main(int argc, char** argv) {
-  std::vector<int> InitMemory = {1, -1, std::atoi(argv[1])};
-  ToySim::SPU Sim {"output.bin", InitMemory, 32, 4};
-  if (argc > 2) {
-    if (std::atoi(argv[2]) == 1) { // TODO cli11
+  std::vector<unsigned> InitMemory = {1, (unsigned)-1, (unsigned)std::atoi(argv[2])};
+  ToySim::SPU Sim {argv[1], InitMemory, 32, 4};
+  if (argc > 3) {
+    if (std::atoi(argv[3]) == 1) { // TODO cli11 for verbosity options
       Sim.memoryDump();
     }
   }
