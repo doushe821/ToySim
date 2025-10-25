@@ -1,13 +1,11 @@
 #pragma once
 #include <cstdint>
 #include <cstring>
-#include <memory>
 #include <unordered_map>
 #include <vector>
 #include <cassert>
 #include <array>
 #include <fstream>
-#include <functional>
 #include <iostream>
 namespace ToySim {
 
@@ -125,17 +123,6 @@ struct Operand {
   unsigned Size;
 };
 
-const std::unordered_map<const InstructionTypesCodes, const std::vector<EncodingPart>> InstructionTypes { // TODO change name
-  {JType,   {{OpCodeEncoding}, {ImmEncoding, 26}}},
-  {BType,   {{OpCodeEncoding}, {RegEncoding}, {RegEncoding}, {ImmEncoding, 16}}},
-  {EType,   {{OpCodeEncoding}, {RegEncoding}, {RegEncoding}, {ImmEncoding, 5}, {ZeroEncoding, 11}}},
-  {DSType,  {{OpCodeEncoding, {RegEncoding}, {RegEncoding}, {RegEncoding}, {ImmEncoding, 11}}}},
-  {SType,   {{OpCodeEncoding, {RegEncoding}, {RegEncoding}, {ImmEncoding, 16}}}},
-  {CType,   {{ZeroEncoding}, {RegEncoding}, {RegEncoding}, {RegEncoding}, {ZeroEncoding, 5}, {OpCodeEncoding}}},
-  {CDType,  {{ZeroEncoding}, {RegEncoding}, {RegEncoding}, {ZeroEncoding, 10}, {OpCodeEncoding}}},
-  {SysType, {{ZeroEncoding}, {ImmEncoding, 20}, {OpCodeEncoding}}}
-};
-
 enum SyscallCodeTable {
   EXIT,
 };
@@ -161,8 +148,7 @@ struct Instruction {
   std::vector<Operand> Operands = {};
 };
 
-// FIXME 
-static const std::unordered_map<OpCodes,  const std::vector<EncodingPart>> Layouts = { // FIXME key is always constant
+static const std::unordered_map<OpCodes,  const std::vector<EncodingPart>> Layouts = {
 {OpCodeJ,       {{OpCodeEncoding}, {ImmEncoding, 26}}},
 {OpCodeMOVN,    {{ZeroEncoding}, {RegEncoding}, {RegEncoding}, {RegEncoding}, {ZeroEncoding, 5}, {OpCodeEncoding}}},
 {OpCodeRBIT,    {{ZeroEncoding}, {RegEncoding}, {RegEncoding}, {ZeroEncoding, 10}, {OpCodeEncoding}}},
@@ -179,21 +165,12 @@ static const std::unordered_map<OpCodes,  const std::vector<EncodingPart>> Layou
 {OpCodeST,     {{OpCodeEncoding}, {RegEncoding}, {RegEncoding}, {ImmEncoding, 16}}}
 };
 
-static const unsigned OpCodeMax = 64;
-
-
-
-
+static constexpr unsigned OpCodeMax = 64;
 class SPU {
 private:
-
-  // TODO Instructions in memory
-  // TODO SPU State struct
-  // Memory speces
   static const unsigned MemorySize = 1024;
   unsigned ProgramStartAddress;
   unsigned ArgumentsStartAddress;
-  // TODO separate class
   bool Finished {false};
   
   struct SPUState {
@@ -227,193 +204,196 @@ private:
   SPUMemory RAM;
   SPUState State = {{}, 0};
 
-// Handlers 
-  // Sycall handlers
+// Syscall handler
   using SyscallHandler = void(*)(SPU *Self, SPU::SPUMemory &RAM, SPU::SPUState &State);
   static void ExitSyscallHandler (SPU *Self, SPU::SPUMemory &RAM, SPU::SPUState &State) {
     std::cout << "\033[1;32mExited with code " << State.Regs[0] << "\033[37m\n";
     Self->Finished = true;
   }
-
   static constexpr std::array<SyscallHandler, 1> SyscallTable {&SPU::ExitSyscallHandler};
-  // INstruction handlers
-  using InstructionHandler = void(*)(ToySim::Instruction &DecodedInstruction, SPU::SPUMemory &RAM, SPU::SPUState &State); // SPU as argument
-  static void HandleInvalidOpCode(ToySim::Instruction &DecodedInstruction, SPU::SPUMemory &RAM, SPU::SPUState &State) {
-    std::cout << "Invalid OpCode on PC = " << State.PC << ", skipping instruction\n";
-  }
+// Syscall handler
 
-  const std::array<InstructionHandler, OpCodeMax> initInstructionTable() {
-    // TODO separate class, inherit from std::array
-    std::array<InstructionHandler, OpCodeMax> TempTable;
-    std::fill(TempTable.begin(), TempTable.end(), &HandleInvalidOpCode);
-    TempTable[OpCodeJ] = [](ToySim::Instruction &DecodedInstruction, SPU::SPUMemory &RAM, SPU::SPUState &State) {
-      assert(DecodedInstruction.Operands.size() == 1);
-      assert(DecodedInstruction.Operands[0].OperandType == ImmEncoding);
-      State.PC += DecodedInstruction.Operands[0].Value;
-    };
-    TempTable[OpCodeMOVN] = [](ToySim::Instruction &DecodedInstruction, SPU::SPUMemory &RAM, SPU::SPUState &State) {
-      assert(DecodedInstruction.Operands.size() == 3);
-      assert(DecodedInstruction.Operands[0].OperandType == RegEncoding);
-      auto &rd = State.Regs[DecodedInstruction.Operands[0].Value];
-      assert(DecodedInstruction.Operands[1].OperandType == RegEncoding);
-      auto &rt = State.Regs[DecodedInstruction.Operands[1].Value];
-      assert(DecodedInstruction.Operands[2].OperandType == RegEncoding);
-      auto &rs = State.Regs[DecodedInstruction.Operands[2].Value];
-      if (rt != 0) {
-        rd = rs;
-      }
-      State.PC += 4;
-    };
-    TempTable[OpCodeRBIT] = [](ToySim::Instruction &DecodedInstruction, SPU::SPUMemory &RAM, SPU::SPUState &State) {
-      assert(DecodedInstruction.Operands.size() == 2);
-      assert(DecodedInstruction.Operands[0].OperandType == RegEncoding);
-      assert(DecodedInstruction.Operands[1].OperandType == RegEncoding);
-      auto &rs = State.Regs[DecodedInstruction.Operands[0].Value];
-      auto &rd = State.Regs[DecodedInstruction.Operands[1].Value];
-      auto ReversedReg = reverse(rs);
-      rd = ReversedReg;
-      State.PC += 4;
-    };
-    TempTable[OpCodeADD] = [](ToySim::Instruction &DecodedInstruction, SPU::SPUMemory &RAM, SPU::SPUState &State) {
-      assert(DecodedInstruction.Operands.size() == 3);
-      assert(DecodedInstruction.Operands[0].OperandType == RegEncoding);
-      assert(DecodedInstruction.Operands[1].OperandType == RegEncoding);
-      assert(DecodedInstruction.Operands[2].OperandType == RegEncoding);
-      auto &rd = State.Regs[DecodedInstruction.Operands[0].Value];
-      auto &rt = State.Regs[DecodedInstruction.Operands[1].Value];
-      auto &rs = State.Regs[DecodedInstruction.Operands[2].Value];
-      rd = rs + rt;
-      State.PC += 4;
-    };
-    TempTable[OpCodeSLTI] = [](ToySim::Instruction &DecodedInstruction, SPU::SPUMemory &RAM, SPU::SPUState &State) {
-      assert(DecodedInstruction.Operands.size() == 3);
-      assert(DecodedInstruction.Operands[0].OperandType == ImmEncoding);
-      assert(DecodedInstruction.Operands[1].OperandType == RegEncoding);
-      assert(DecodedInstruction.Operands[2].OperandType == RegEncoding);
-      auto &imm = DecodedInstruction.Operands[0].Value;
-      auto &rt = State.Regs[DecodedInstruction.Operands[1].Value];
-      auto &rs = State.Regs[DecodedInstruction.Operands[2].Value];
-      rt = (rs < signExtend(imm, DecodedInstruction.Operands[0].Size));
-      State.PC += 4;
-    };
-    TempTable[OpCodeLD] = [](ToySim::Instruction &DecodedInstruction, SPU::SPUMemory &RAM, SPU::SPUState &State) {
-      assert(DecodedInstruction.Operands.size() == 3);
-      assert(DecodedInstruction.Operands[0].OperandType == ImmEncoding);
-      assert(DecodedInstruction.Operands[1].OperandType == RegEncoding);
-      assert(DecodedInstruction.Operands[2].OperandType == RegEncoding);
-      auto &imm = DecodedInstruction.Operands[0].Value;
-      auto &rt = State.Regs[DecodedInstruction.Operands[1].Value];
-      auto &base = State.Regs[DecodedInstruction.Operands[2].Value];
-      // std::cout << "Base reg = " << DecodedInstruction.Operands[2].Value << '\n';
-      // std::cout << "Base = " << base << '\n';
-      RAM.read(&rt, sizeof(rt), base + signExtend(imm, DecodedInstruction.Operands[0].Size));
-      State.PC += 4;
-    };
-    TempTable[OpCodeCBIT] = [](ToySim::Instruction &DecodedInstruction, SPU::SPUMemory &RAM, SPU::SPUState &State) {
-      assert(DecodedInstruction.Operands.size() == 3);
-      assert(DecodedInstruction.Operands[0].OperandType == ImmEncoding);
-      assert(DecodedInstruction.Operands[1].OperandType == RegEncoding);
-      assert(DecodedInstruction.Operands[2].OperandType == RegEncoding);
-      auto &imm = DecodedInstruction.Operands[0].Value;
-      auto &rs = State.Regs[DecodedInstruction.Operands[1].Value];
-      auto &rd = State.Regs[DecodedInstruction.Operands[2].Value];
-      rd = rs & (~(1 << (imm - 1)));
-      State.PC += 4;
-    };
-    TempTable[OpCodeSTP] = [](ToySim::Instruction &DecodedInstruction, SPU::SPUMemory &RAM, SPU::SPUState &State) {
-      assert(DecodedInstruction.Operands.size() == 4);
-      assert(DecodedInstruction.Operands[0].OperandType == ImmEncoding);
-      assert(DecodedInstruction.Operands[1].OperandType == RegEncoding);
-      assert(DecodedInstruction.Operands[2].OperandType == RegEncoding);
-      assert(DecodedInstruction.Operands[3].OperandType == RegEncoding);
-      auto &imm = DecodedInstruction.Operands[0].Value;
-      auto &rt2 = State.Regs[DecodedInstruction.Operands[1].Value];
-      auto &rt1 = State.Regs[DecodedInstruction.Operands[2].Value];
-      auto &base = State.Regs[DecodedInstruction.Operands[3].Value];
-      auto addr = base + signExtend(imm, DecodedInstruction.Operands[0].Size);
-      RAM.write(&rt1, sizeof(rt1), addr);
-      RAM.write(&rt2, sizeof(rt2), addr + sizeof(rt1));
-      State.PC += 4;
-    };
-    TempTable[OpCodeBNE] = [](ToySim::Instruction &DecodedInstruction, SPU::SPUMemory &RAM, SPU::SPUState &State) {
-      assert(DecodedInstruction.Operands.size() == 3);
-      assert(DecodedInstruction.Operands[0].OperandType == ImmEncoding);
-      assert(DecodedInstruction.Operands[1].OperandType == RegEncoding);
-      assert(DecodedInstruction.Operands[2].OperandType == RegEncoding);
-      auto &imm = DecodedInstruction.Operands[0].Value;
-      auto &rt = State.Regs[DecodedInstruction.Operands[1].Value];
-      auto &rs = State.Regs[DecodedInstruction.Operands[2].Value];
-      auto target = signExtend(imm | 0b00, DecodedInstruction.Operands[0].Size);
-      auto cond = rs != rt;
-      if (cond) {
-        State.PC += target;
-      } else {
-        State.PC += 4;
-      }
-    };
-    TempTable[OpCodeUSAT] = [](ToySim::Instruction &DecodedInstruction, SPU::SPUMemory &RAM, SPU::SPUState &State) {
-      assert(DecodedInstruction.Operands.size() == 3);
-      assert(DecodedInstruction.Operands[0].OperandType == ImmEncoding);
-      assert(DecodedInstruction.Operands[1].OperandType == RegEncoding);
-      assert(DecodedInstruction.Operands[2].OperandType == RegEncoding);
-      auto &imm = DecodedInstruction.Operands[0].Value;
-      auto &rd = State.Regs[DecodedInstruction.Operands[1].Value];
-      auto &rs = State.Regs[DecodedInstruction.Operands[2].Value];
-      rd = saturateUnsigned(rs, imm);
-      State.PC += 4;
-    };
-    TempTable[OpCodeBEQ] = [](ToySim::Instruction &DecodedInstruction, SPU::SPUMemory &RAM, SPU::SPUState &State) {
-      assert(DecodedInstruction.Operands.size() == 3);
-      assert(DecodedInstruction.Operands[0].OperandType == ImmEncoding);
-      assert(DecodedInstruction.Operands[1].OperandType == RegEncoding);
-      assert(DecodedInstruction.Operands[2].OperandType == RegEncoding);
-      auto &imm = DecodedInstruction.Operands[0].Value;
-      auto &rt = State.Regs[DecodedInstruction.Operands[1].Value];
-      auto &rs = State.Regs[DecodedInstruction.Operands[2].Value];
-      auto target = signExtend(imm | 0b00, DecodedInstruction.Operands[0].Size);
-      auto cond = rs == rt;
-      if (cond) {
-        State.PC += target;
-      } else {
-        State.PC += 4;
-      }
-    };
-    TempTable[OpCodeBDEP] = [](ToySim::Instruction &DecodedInstruction, SPU::SPUMemory &RAM, SPU::SPUState &State) {
-      assert(DecodedInstruction.Operands.size() == 3);
-      assert(DecodedInstruction.Operands[0].OperandType == RegEncoding);
-      assert(DecodedInstruction.Operands[1].OperandType == RegEncoding);
-      assert(DecodedInstruction.Operands[2].OperandType == RegEncoding);
-      auto &rs2 = DecodedInstruction.Operands[0].Value;
-      auto &rs1 = State.Regs[DecodedInstruction.Operands[1].Value];
-      auto &rd = State.Regs[DecodedInstruction.Operands[2].Value];
-      rd = 0;
-      auto DepCount {0};
-      for (unsigned Bit = 0; Bit < 32; ++Bit) {
-        auto Masked = rs2 & (1 << Bit);
-        if (Masked) {
-          if (rs1 & (1 << DepCount)) {
-            rd |= Masked;
-          }
-          ++DepCount;
+// Instruction handler
+using InstructionHandler = void(*)(ToySim::Instruction &DecodedInstruction, SPU::SPUMemory &RAM, SPU::SPUState &State); // SPU as argument
+  class InstructionTable : std::array<InstructionHandler, OpCodeMax> {
+  private:
+    static void HandleInvalidOpCode(ToySim::Instruction &DecodedInstruction, SPU::SPUMemory &RAM, SPU::SPUState &State) {
+      std::cout << "Invalid OpCode on PC = " << State.PC << ", skipping instruction\n";
+    }
+  public:
+    InstructionTable() {
+      std::fill(this->begin(), this->end(), &HandleInvalidOpCode);
+      (*this)[OpCodeJ] = [](ToySim::Instruction &DecodedInstruction, SPU::SPUMemory &RAM, SPU::SPUState &State) {
+        assert(DecodedInstruction.Operands.size() == 1);
+        assert(DecodedInstruction.Operands[0].OperandType == ImmEncoding);
+        State.PC += DecodedInstruction.Operands[0].Value;
+      };
+      (*this)[OpCodeMOVN] = [](ToySim::Instruction &DecodedInstruction, SPU::SPUMemory &RAM, SPU::SPUState &State) {
+        assert(DecodedInstruction.Operands.size() == 3);
+        assert(DecodedInstruction.Operands[0].OperandType == RegEncoding);
+        auto &rd = State.Regs[DecodedInstruction.Operands[0].Value];
+        assert(DecodedInstruction.Operands[1].OperandType == RegEncoding);
+        auto &rt = State.Regs[DecodedInstruction.Operands[1].Value];
+        assert(DecodedInstruction.Operands[2].OperandType == RegEncoding);
+        auto &rs = State.Regs[DecodedInstruction.Operands[2].Value];
+        if (rt != 0) {
+          rd = rs;
         }
-      }
-      State.PC += 4;
-    };
-    TempTable[OpCodeST] = [](ToySim::Instruction &DecodedInstruction, SPU::SPUMemory &RAM, SPU::SPUState &State) {
-      assert(DecodedInstruction.Operands.size() == 3);
-      assert(DecodedInstruction.Operands[0].OperandType == ImmEncoding);
-      assert(DecodedInstruction.Operands[1].OperandType == RegEncoding);
-      assert(DecodedInstruction.Operands[2].OperandType == RegEncoding);
-      auto &imm = DecodedInstruction.Operands[0].Value;
-      auto &rt = State.Regs[DecodedInstruction.Operands[1].Value];
-      auto &base = State.Regs[DecodedInstruction.Operands[2].Value];
-      RAM.write(&rt, sizeof(rt), base + signExtend(imm, DecodedInstruction.Operands[0].Size));
-      State.PC += 4;
-    };
-    return TempTable;
+        State.PC += 4;
+      };
+      (*this)[OpCodeRBIT] = [](ToySim::Instruction &DecodedInstruction, SPU::SPUMemory &RAM, SPU::SPUState &State) {
+        assert(DecodedInstruction.Operands.size() == 2);
+        assert(DecodedInstruction.Operands[0].OperandType == RegEncoding);
+        assert(DecodedInstruction.Operands[1].OperandType == RegEncoding);
+        auto &rs = State.Regs[DecodedInstruction.Operands[0].Value];
+        auto &rd = State.Regs[DecodedInstruction.Operands[1].Value];
+        auto ReversedReg = reverse(rs);
+        rd = ReversedReg;
+        State.PC += 4;
+      };
+      (*this)[OpCodeADD] = [](ToySim::Instruction &DecodedInstruction, SPU::SPUMemory &RAM, SPU::SPUState &State) {
+        assert(DecodedInstruction.Operands.size() == 3);
+        assert(DecodedInstruction.Operands[0].OperandType == RegEncoding);
+        assert(DecodedInstruction.Operands[1].OperandType == RegEncoding);
+        assert(DecodedInstruction.Operands[2].OperandType == RegEncoding);
+        auto &rd = State.Regs[DecodedInstruction.Operands[0].Value];
+        auto &rt = State.Regs[DecodedInstruction.Operands[1].Value];
+        auto &rs = State.Regs[DecodedInstruction.Operands[2].Value];
+        rd = rs + rt;
+        State.PC += 4;
+      };
+      (*this)[OpCodeSLTI] = [](ToySim::Instruction &DecodedInstruction, SPU::SPUMemory &RAM, SPU::SPUState &State) {
+        assert(DecodedInstruction.Operands.size() == 3);
+        assert(DecodedInstruction.Operands[0].OperandType == ImmEncoding);
+        assert(DecodedInstruction.Operands[1].OperandType == RegEncoding);
+        assert(DecodedInstruction.Operands[2].OperandType == RegEncoding);
+        auto &imm = DecodedInstruction.Operands[0].Value;
+        auto &rt = State.Regs[DecodedInstruction.Operands[1].Value];
+        auto &rs = State.Regs[DecodedInstruction.Operands[2].Value];
+        rt = (rs < signExtend(imm, DecodedInstruction.Operands[0].Size));
+        State.PC += 4;
+      };
+      (*this)[OpCodeLD] = [](ToySim::Instruction &DecodedInstruction, SPU::SPUMemory &RAM, SPU::SPUState &State) {
+        assert(DecodedInstruction.Operands.size() == 3);
+        assert(DecodedInstruction.Operands[0].OperandType == ImmEncoding);
+        assert(DecodedInstruction.Operands[1].OperandType == RegEncoding);
+        assert(DecodedInstruction.Operands[2].OperandType == RegEncoding);
+        auto &imm = DecodedInstruction.Operands[0].Value;
+        auto &rt = State.Regs[DecodedInstruction.Operands[1].Value];
+        auto &base = State.Regs[DecodedInstruction.Operands[2].Value];
+        // std::cout << "Base reg = " << DecodedInstruction.Operands[2].Value << '\n';
+        // std::cout << "Base = " << base << '\n';
+        RAM.read(&rt, sizeof(rt), base + signExtend(imm, DecodedInstruction.Operands[0].Size));
+        State.PC += 4;
+      };
+      (*this)[OpCodeCBIT] = [](ToySim::Instruction &DecodedInstruction, SPU::SPUMemory &RAM, SPU::SPUState &State) {
+        assert(DecodedInstruction.Operands.size() == 3);
+        assert(DecodedInstruction.Operands[0].OperandType == ImmEncoding);
+        assert(DecodedInstruction.Operands[1].OperandType == RegEncoding);
+        assert(DecodedInstruction.Operands[2].OperandType == RegEncoding);
+        auto &imm = DecodedInstruction.Operands[0].Value;
+        auto &rs = State.Regs[DecodedInstruction.Operands[1].Value];
+        auto &rd = State.Regs[DecodedInstruction.Operands[2].Value];
+        rd = rs & (~(1 << (imm - 1)));
+        State.PC += 4;
+      };
+      (*this)[OpCodeSTP] = [](ToySim::Instruction &DecodedInstruction, SPU::SPUMemory &RAM, SPU::SPUState &State) {
+        assert(DecodedInstruction.Operands.size() == 4);
+        assert(DecodedInstruction.Operands[0].OperandType == ImmEncoding);
+        assert(DecodedInstruction.Operands[1].OperandType == RegEncoding);
+        assert(DecodedInstruction.Operands[2].OperandType == RegEncoding);
+        assert(DecodedInstruction.Operands[3].OperandType == RegEncoding);
+        auto &imm = DecodedInstruction.Operands[0].Value;
+        auto &rt2 = State.Regs[DecodedInstruction.Operands[1].Value];
+        auto &rt1 = State.Regs[DecodedInstruction.Operands[2].Value];
+        auto &base = State.Regs[DecodedInstruction.Operands[3].Value];
+        auto addr = base + signExtend(imm, DecodedInstruction.Operands[0].Size);
+        RAM.write(&rt1, sizeof(rt1), addr);
+        RAM.write(&rt2, sizeof(rt2), addr + sizeof(rt1));
+        State.PC += 4;
+      };
+      (*this)[OpCodeBNE] = [](ToySim::Instruction &DecodedInstruction, SPU::SPUMemory &RAM, SPU::SPUState &State) {
+        assert(DecodedInstruction.Operands.size() == 3);
+        assert(DecodedInstruction.Operands[0].OperandType == ImmEncoding);
+        assert(DecodedInstruction.Operands[1].OperandType == RegEncoding);
+        assert(DecodedInstruction.Operands[2].OperandType == RegEncoding);
+        auto &imm = DecodedInstruction.Operands[0].Value;
+        auto &rt = State.Regs[DecodedInstruction.Operands[1].Value];
+        auto &rs = State.Regs[DecodedInstruction.Operands[2].Value];
+        auto target = signExtend(imm | 0b00, DecodedInstruction.Operands[0].Size);
+        auto cond = rs != rt;
+        if (cond) {
+          State.PC += target;
+        } else {
+          State.PC += 4;
+        }
+      };
+      (*this)[OpCodeUSAT] = [](ToySim::Instruction &DecodedInstruction, SPU::SPUMemory &RAM, SPU::SPUState &State) {
+        assert(DecodedInstruction.Operands.size() == 3);
+        assert(DecodedInstruction.Operands[0].OperandType == ImmEncoding);
+        assert(DecodedInstruction.Operands[1].OperandType == RegEncoding);
+        assert(DecodedInstruction.Operands[2].OperandType == RegEncoding);
+        auto &imm = DecodedInstruction.Operands[0].Value;
+        auto &rd = State.Regs[DecodedInstruction.Operands[1].Value];
+        auto &rs = State.Regs[DecodedInstruction.Operands[2].Value];
+        rd = saturateUnsigned(rs, imm);
+        State.PC += 4;
+      };
+      (*this)[OpCodeBEQ] = [](ToySim::Instruction &DecodedInstruction, SPU::SPUMemory &RAM, SPU::SPUState &State) {
+        assert(DecodedInstruction.Operands.size() == 3);
+        assert(DecodedInstruction.Operands[0].OperandType == ImmEncoding);
+        assert(DecodedInstruction.Operands[1].OperandType == RegEncoding);
+        assert(DecodedInstruction.Operands[2].OperandType == RegEncoding);
+        auto &imm = DecodedInstruction.Operands[0].Value;
+        auto &rt = State.Regs[DecodedInstruction.Operands[1].Value];
+        auto &rs = State.Regs[DecodedInstruction.Operands[2].Value];
+        auto target = signExtend(imm | 0b00, DecodedInstruction.Operands[0].Size);
+        auto cond = rs == rt;
+        if (cond) {
+          State.PC += target;
+        } else {
+          State.PC += 4;
+        }
+      };
+      (*this)[OpCodeBDEP] = [](ToySim::Instruction &DecodedInstruction, SPU::SPUMemory &RAM, SPU::SPUState &State) {
+        assert(DecodedInstruction.Operands.size() == 3);
+        assert(DecodedInstruction.Operands[0].OperandType == RegEncoding);
+        assert(DecodedInstruction.Operands[1].OperandType == RegEncoding);
+        assert(DecodedInstruction.Operands[2].OperandType == RegEncoding);
+        auto &rs2 = DecodedInstruction.Operands[0].Value;
+        auto &rs1 = State.Regs[DecodedInstruction.Operands[1].Value];
+        auto &rd = State.Regs[DecodedInstruction.Operands[2].Value];
+        rd = 0;
+        auto DepCount {0};
+        for (unsigned Bit = 0; Bit < 32; ++Bit) {
+          auto Masked = rs2 & (1 << Bit);
+          if (Masked) {
+            if (rs1 & (1 << DepCount)) {
+              rd |= Masked;
+            }
+            ++DepCount;
+          }
+        }
+        State.PC += 4;
+      };
+      (*this)[OpCodeST] = [](ToySim::Instruction &DecodedInstruction, SPU::SPUMemory &RAM, SPU::SPUState &State) {
+        assert(DecodedInstruction.Operands.size() == 3);
+        assert(DecodedInstruction.Operands[0].OperandType == ImmEncoding);
+        assert(DecodedInstruction.Operands[1].OperandType == RegEncoding);
+        assert(DecodedInstruction.Operands[2].OperandType == RegEncoding);
+        auto &imm = DecodedInstruction.Operands[0].Value;
+        auto &rt = State.Regs[DecodedInstruction.Operands[1].Value];
+        auto &base = State.Regs[DecodedInstruction.Operands[2].Value];
+        RAM.write(&rt, sizeof(rt), base + signExtend(imm, DecodedInstruction.Operands[0].Size));
+        State.PC += 4;
+      };
+    }
+
+    using std::array<InstructionHandler, OpCodeMax>::at;
   };
 
-  std::array<InstructionHandler, OpCodeMax> InstructionTable;
+  static inline const InstructionTable SPUInstructionTable;
+// Instruction handler
 public:
   SPU(const std::string& FileName, std::vector<unsigned> &Arguments) {
     std::ifstream File(FileName, std::ios::binary);
@@ -442,7 +422,6 @@ public:
     ArgumentsStartAddress = 0;
     ProgramStartAddress = Arguments.size() * sizeof(unsigned);
 
-    InstructionTable = initInstructionTable();
     // TODO memory parameters that are defined by cli (again, CLI11 is needed)
     // FIXME for now address of arguments' list always starts with zero. 
   }
@@ -454,5 +433,4 @@ public:
   void memoryDump() const;
   void stateDump() const;
 };
-
 } // namespace ToySim

@@ -8,14 +8,14 @@
 
 namespace ToySim {
   void SPU::compute() {
-    while (State.PC < RAM.Memory.size()) { // TODO exit condition
+    while (State.PC < RAM.Memory.size()) {
       uint32_t BinInstruction;
       RAM.read(&BinInstruction, sizeof(BinInstruction), State.PC);
       Instruction DecodedInstruction = decode(BinInstruction);
       if(DecodedInstruction.OpCode == OpCodeSYSCALL) {
         (SyscallTable[State.Regs[8]])(this, RAM, State);
       } else {
-        InstructionTable[DecodedInstruction.OpCode](DecodedInstruction, RAM, State); // TODO SPU state
+        ToySim::SPU::SPUInstructionTable.at(DecodedInstruction.OpCode)(DecodedInstruction, RAM, State);
       }
         if (Finished) {
         break;
@@ -24,15 +24,15 @@ namespace ToySim {
   }
 
   Instruction SPU::decode(uint32_t BinInstruction) const {
-    OpCodes OpCode = (OpCodes)((BinInstruction & High6bitMask) >> 26); // TODO comment types
+    OpCodes OpCode = (OpCodes)((BinInstruction & High6bitMask) >> 26);
     if (OpCode == 0) {
-      OpCode = (OpCodes)(BinInstruction & Low6bitMask); // TODO comment types
+      OpCode = (OpCodes)(BinInstruction & Low6bitMask);
     }
     auto Layout = Layouts.at(OpCode);;
 
     std::vector<Operand> Operands;
     auto CurrentBit{0};
-    for (auto Part = Layout.rbegin(); Part != Layout.rend(); ++Part) { // != for generalization
+    for (auto Part = Layout.rbegin(); Part != Layout.rend(); ++Part) {
       if (Part->PartCode == OpCodeEncoding || Part->PartCode == ZeroEncoding) {
         CurrentBit += Part->PartSize;
         continue;
