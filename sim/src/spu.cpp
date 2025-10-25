@@ -1,4 +1,5 @@
 #include <cassert>
+#include <cstdint>
 #include <iterator>
 #include <vector>
 #include <iostream>
@@ -12,28 +13,24 @@
 
 namespace ToySim {
   void SPU::compute() {
-    assert(!BinInstructions.empty());
-    while (PC / 4 <= BinInstructions.size() - 1) { // TODO exit condition
-      auto BinInstruction = BinInstructions[PC / 4];
+    while (State.PC < RAM.Memory.size()) { // TODO exit condition
+      uint32_t BinInstruction;
+      RAM.read(&BinInstruction, sizeof(BinInstruction), State.PC);
       Instruction DecodedInstruction = decode(BinInstruction);
-      auto &Ops = DecodedInstruction.Operands; 
-      InstructionTable[DecodedInstruction.OpCode](DecodedInstruction, Regs, Memory, Ops, PC); // TODO SPU state
+      InstructionTable[DecodedInstruction.OpCode](DecodedInstruction, State, RAM); // TODO SPU state
     }
   }
 
-  Instruction SPU::decode(int BinInstruction) const {
+  Instruction SPU::decode(uint32_t BinInstruction) const {
     OpCodes OpCode = (OpCodes)((BinInstruction & High6bitMask) >> 26); // TODO comment types
     if (OpCode == 0) {
       OpCode = (OpCodes)(BinInstruction & Low6bitMask); // TODO comment types
     }
-    auto Layout = Layouts.at(OpCode);
+    auto Layout = Layouts.at(OpCode);;
 
-    auto BinLayout = Layout.second; // TODO struct maybe
-
-    // TODO check ariphmetics if it bugs (it actually bugged)
     std::vector<Operand> Operands;
     auto CurrentBit{0};
-    for (auto Part = BinLayout.rbegin(); Part != BinLayout.rend(); ++Part) { // != for generalization
+    for (auto Part = Layout.rbegin(); Part != Layout.rend(); ++Part) { // != for generalization
       if (Part->PartCode == OpCodeEncoding || Part->PartCode == ZeroEncoding) {
         CurrentBit += Part->PartSize;
         continue;
@@ -49,19 +46,21 @@ namespace ToySim {
 
   void SPU::memoryDump() const {
     std::cout << "### SPU memory dump: ###\n";
-    for (unsigned I = 0; I < Memory.size(); ++I) {
-      std::cout << "[" << I << "]: " << Memory[I] << '\n';
+    for (unsigned I = 0; I < RAM.kExecutableSegmentStartAddress; ++I) {
+      uint32_t Value;
+      RAM.read(&Value, sizeof(Value), I * sizeof(Value));
+      std::cout << "[" << I << "]: " << Value << '\n';
     }
     std::cout << "########################\n\n";
   }
 
   void SPU::regDump(unsigned N) const {
-    std::cout << "[PC] = " << PC << '\n';
-    if (N > RegNum) {
-      N = RegNum;
+    std::cout << "[PC] = " << State.PC << '\n';
+    if (N > State.Regs.size()) {
+      N = State.Regs.size();
     }
     for (unsigned RegCounter = 0; RegCounter < N; ++RegCounter) {
-      std::cout << "[x" << RegCounter << "] = " << Regs[RegCounter] << '\n';
+      std::cout << "[x" << RegCounter << "] = " << State.Regs[RegCounter] << '\n';
     }
   }
 

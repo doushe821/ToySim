@@ -1,5 +1,7 @@
 #pragma once
 #include <cstdint>
+#include <cstring>
+#include <memory>
 #include <unordered_map>
 #include <vector>
 #include <cassert>
@@ -117,7 +119,7 @@ enum OperandTypes {
   ImmOT
 };
 struct Operand {
-  int Value;
+  uint32_t Value;
   EncodingPartCode OperandType;
   unsigned Size;
 };
@@ -159,23 +161,21 @@ struct Instruction {
 };
 
 // FIXME 
-// FIXME
-// FIXME
-static const std::unordered_map<OpCodes, std::pair<InstructionTypesCodes, const std::vector<EncodingPart>>> Layouts = { // FIXME key is always constant
-{OpCodeJ,       {JType, InstructionTypes.at(JType)}},
-{OpCodeMOVN,    {CType, InstructionTypes.at(CType)}},
-{OpCodeRBIT,    {CDType, InstructionTypes.at(CDType)}},
-{OpCodeADD,     {CType, InstructionTypes.at(CType)}},
-{OpCodeSLTI,    {BType, InstructionTypes.at(BType)}},
-{OpCodeLD,      {BType, InstructionTypes.at(BType)}},
-{OpCodeSYSCALL, {SysType, InstructionTypes.at(SysType)}},
-{OpCodeCBIT,    {EType, InstructionTypes.at(EType)}}, 
-{OpCodeSTP,     {DSType, InstructionTypes.at(DSType)}},
-{OpCodeBNE,     {BType, InstructionTypes.at(BType)}},
-{OpCodeUSAT,   {EType, InstructionTypes.at(EType)}},
-{OpCodeBEQ,    {BType, InstructionTypes.at(BType)}},
-{OpCodeBDEP,   {CType, InstructionTypes.at(CType)}},
-{OpCodeST,     {BType, InstructionTypes.at(BType)}}
+static const std::unordered_map<OpCodes,  const std::vector<EncodingPart>> Layouts = { // FIXME key is always constant
+{OpCodeJ,       {{OpCodeEncoding}, {ImmEncoding, 26}}},
+{OpCodeMOVN,    {{ZeroEncoding}, {RegEncoding}, {RegEncoding}, {RegEncoding}, {ZeroEncoding, 5}, {OpCodeEncoding}}},
+{OpCodeRBIT,    {{ZeroEncoding}, {RegEncoding}, {RegEncoding}, {ZeroEncoding, 10}, {OpCodeEncoding}}},
+{OpCodeADD,     {{ZeroEncoding}, {RegEncoding}, {RegEncoding}, {RegEncoding}, {ZeroEncoding, 5}, {OpCodeEncoding}}},
+{OpCodeSLTI,    {{OpCodeEncoding}, {RegEncoding}, {RegEncoding}, {ImmEncoding, 16}}},
+{OpCodeLD,      {{OpCodeEncoding}, {RegEncoding}, {RegEncoding}, {ImmEncoding, 16}}},
+{OpCodeSYSCALL, {{ZeroEncoding}, {ImmEncoding, 20}, {OpCodeEncoding}}},
+{OpCodeCBIT,    {{OpCodeEncoding}, {RegEncoding}, {RegEncoding}, {ImmEncoding, 5}, {ZeroEncoding, 11}}}, 
+{OpCodeSTP,     {{OpCodeEncoding, {RegEncoding}, {RegEncoding}, {RegEncoding}, {ImmEncoding, 11}}}},
+{OpCodeBNE,     {{OpCodeEncoding}, {RegEncoding}, {RegEncoding}, {ImmEncoding, 16}}},
+{OpCodeUSAT,   {{OpCodeEncoding}, {RegEncoding}, {RegEncoding}, {ImmEncoding, 5}, {ZeroEncoding, 11}}},
+{OpCodeBEQ,    {{OpCodeEncoding}, {RegEncoding}, {RegEncoding}, {ImmEncoding, 16}}},
+{OpCodeBDEP,   {{ZeroEncoding}, {RegEncoding}, {RegEncoding}, {RegEncoding}, {ZeroEncoding, 5}, {OpCodeEncoding}}},
+{OpCodeST,     {{OpCodeEncoding}, {RegEncoding}, {RegEncoding}, {ImmEncoding, 16}}}
 };
 
 static const unsigned OpCodeMax = 64;
@@ -188,8 +188,6 @@ static void HandleInvalidOpCode(ToySim::Instruction &DecodedInstruction, std::ve
 using SyscallHandler = void(*)(std::vector<unsigned> &Regs, std::vector<unsigned> &Memory, unsigned &PC);
 constexpr static std::array<SyscallHandler, 1> SyscallTable = {[](std::vector<unsigned> &Regs, std::vector<unsigned> &Memory, unsigned &PC) { std::cout << "\033[1;32mExited with code " << Regs[0] << "\033[37m\n"; PC = UINT32_MAX - 4; }}; // FIXME finished
 
-// FIXME threads share memory
-// TODO unsigned register, unsigned memory
 using InstructionHandler = void(*)(ToySim::Instruction &DecodedInstruction, std::vector<unsigned> &Regs, std::vector<unsigned> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC); // SPU as argument
 constexpr static std::array<InstructionHandler, OpCodeMax> initInstructionTable() {
   // TODO separate class, inherit from std::array
@@ -227,7 +225,7 @@ constexpr static std::array<InstructionHandler, OpCodeMax> initInstructionTable(
   TempTable[OpCodeADD] = [](ToySim::Instruction &DecodedInstruction, std::vector<unsigned> &Regs, std::vector<unsigned> &Memory, std::vector<ToySim::Operand> &Ops, unsigned &PC) {
     assert(Ops.size() == 3);
     assert(Ops[0].OperandType == RegEncoding);
-    assert(Ops[1].OperandType == RegEncoding);
+    assert(Ops[1].OperandType == RegEncoding);>
     assert(Ops[2].OperandType == RegEncoding);
     auto &rd = Regs[Ops[0].Value];
     auto &rt = Regs[Ops[1].Value];
@@ -379,9 +377,6 @@ private:
   static const unsigned MemorySize = 1024;
   unsigned ProgramStartAddress;
   unsigned ArgumentsStartAddress;
-  // memory specs
-  std::vector<unsigned> BinInstructions;
-  
   // TODO separate class
   static constexpr std::array<InstructionHandler, OpCodeMax> InstructionTable = initInstructionTable();
 
@@ -397,9 +392,100 @@ private:
     Write,
   };
 
-  struct SPUMemory {
-    std::array<char, MemorySize> Memory;
+  class SPUMemory {
+  private:
+    static const unsigned kOctWordSize = 32;
+    static const unsigned kQuadWordSize = 16;
+    static const unsigned kDoubleWordSize = 8;
+    static const unsigned kWordSize = 4;
+    static const unsigned kHalfWordSize = 2;
+    static const unsigned kByteSize = 1;
+
     std::unordered_map<unsigned, char> Segments;
+    public:
+    std::array<char, MemorySize> Memory;
+    static const unsigned kExecutableSegmentStartAddress = 400;
+    void write(const void* Source, unsigned N, unsigned DestinationAddress) {
+      assert(Source && "Invalid source pointer\n");
+      assert((DestinationAddress < MemorySize && DestinationAddress + N < MemorySize) && "Trying to write to unreachable address\n");
+      unsigned SourceBufferIndex {0};
+      while (N > kOctWordSize) {
+        memcpy(reinterpret_cast<char*>(Memory.data()) + DestinationAddress + SourceBufferIndex, Source, kOctWordSize);
+        N -= kOctWordSize;
+        SourceBufferIndex += kOctWordSize;
+      }
+
+      while (N > kQuadWordSize) {
+        memcpy(reinterpret_cast<char*>(Memory.data()) + DestinationAddress + SourceBufferIndex, Source, kQuadWordSize);
+        N -= kQuadWordSize;
+        SourceBufferIndex += kQuadWordSize;
+      }
+
+      while (N > kDoubleWordSize) {
+        memcpy(reinterpret_cast<char*>(Memory.data()) + DestinationAddress + SourceBufferIndex, Source, kDoubleWordSize);
+        N -= kDoubleWordSize;
+        SourceBufferIndex += kDoubleWordSize;
+      }
+
+      while (N > kWordSize) {
+        memcpy(reinterpret_cast<char*>(Memory.data()) + DestinationAddress + SourceBufferIndex, Source, kWordSize);
+        N -= kWordSize;
+        SourceBufferIndex += kWordSize;
+      }
+
+      while (N > kHalfWordSize) {
+        memcpy(reinterpret_cast<char*>(Memory.data()) + DestinationAddress + SourceBufferIndex, Source, kHalfWordSize);
+        N -= kHalfWordSize;
+        SourceBufferIndex += kHalfWordSize;
+      }
+      
+      while (N > kByteSize) {
+        memcpy(reinterpret_cast<char*>(Memory.data()) + DestinationAddress + SourceBufferIndex, Source, kByteSize);
+        N -= kByteSize;
+        SourceBufferIndex += kByteSize;
+      }
+    }
+
+    void read(void* Destination, unsigned N, unsigned SourceAddress) const {
+      assert(Destination && "Invalid destination pointer\n");
+      assert((SourceAddress < MemorySize && SourceAddress + N < MemorySize) && "Trying to read from unreachable address\n");
+      unsigned DestBufferIndex {0};
+      while (N > kOctWordSize) {
+        memcpy(Destination, reinterpret_cast<const char*>(Memory.data()) + SourceAddress + DestBufferIndex, kOctWordSize);
+        N -= kOctWordSize;
+        DestBufferIndex += kOctWordSize;
+      }
+
+      while (N > kQuadWordSize) {
+        memcpy(Destination, reinterpret_cast<const char*>(Memory.data()) + SourceAddress + DestBufferIndex, kQuadWordSize);
+        N -= kQuadWordSize;
+        DestBufferIndex += kQuadWordSize;
+      }
+
+      while (N > kDoubleWordSize) {
+        memcpy(Destination, reinterpret_cast<const char*>(Memory.data()) + SourceAddress + DestBufferIndex, kDoubleWordSize);
+        N -= kDoubleWordSize;
+        DestBufferIndex += kDoubleWordSize;
+      }
+
+      while (N > kWordSize) {
+        memcpy(Destination, reinterpret_cast<const char*>(Memory.data()) + SourceAddress + DestBufferIndex, kWordSize);
+        N -= kWordSize;
+        DestBufferIndex += kWordSize;
+      }
+
+      while (N > kHalfWordSize) {
+        memcpy(Destination, reinterpret_cast<const char*>(Memory.data()) + SourceAddress + DestBufferIndex, kHalfWordSize);
+        N -= kHalfWordSize;
+        DestBufferIndex += kHalfWordSize;
+      }
+      
+      while (N > kByteSize) {
+        memcpy(Destination, reinterpret_cast<const char*>(Memory.data()) + SourceAddress + DestBufferIndex, kByteSize);
+        N -= kByteSize;
+        DestBufferIndex += kByteSize;
+      }
+    }
   };
 
   SPUMemory RAM;
@@ -416,22 +502,23 @@ public:
     std::streamsize Size = File.tellg();
     File.seekg(0, std::ios::beg);
 
-    assert(Size % sizeof(int) == 0);
-    BinInstructions.resize(Size/4);
-    File.read(reinterpret_cast<char*>(BinInstructions.data()), Size);
-    File.close();
-
     // Not enough memory to load program
     if (MemorySize <= Size) {
       assert(0);
     }
+    assert(Size % sizeof(int) == 0);
+    File.read(reinterpret_cast<char*>(RAM.Memory.data() + RAM.kExecutableSegmentStartAddress), Size);
+    File.close();
+
+    State.PC = RAM.kExecutableSegmentStartAddress;
+
     ArgumentsStartAddress = 0;
     ProgramStartAddress = Arguments.size() * sizeof(unsigned);
     // TODO memory parameters that are defined by cli (again, CLI11 is needed)
     // FIXME for now address of arguments' list always starts with zero. 
   }
 
-  Instruction decode(int Instruction) const;
+  Instruction decode(uint32_t BinInstruction) const;
   
   void compute();
   void regDump(unsigned N = 32) const;
