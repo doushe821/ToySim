@@ -12,12 +12,8 @@ namespace ToySim {
       uint32_t BinInstruction;
       RAM.read(&BinInstruction, sizeof(BinInstruction), State.PC);
       Instruction DecodedInstruction = decode(BinInstruction);
-      if(DecodedInstruction.OpCode == OpCodeSYSCALL) {
-        (SyscallTable[State.Regs[8]])(this, RAM, State);
-      } else {
-        ToySim::SPU::SPUInstructionTable.at(DecodedInstruction.OpCode)(DecodedInstruction, RAM, State);
-      }
-        if (Finished) {
+      ToySim::SPU::SPUInstructionTable.at(DecodedInstruction.OpCode)(DecodedInstruction, RAM, State);
+      if (State.Finished) {
         break;
       }
     }

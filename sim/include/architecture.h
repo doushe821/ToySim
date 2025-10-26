@@ -171,11 +171,11 @@ private:
   static const unsigned MemorySize = 1024;
   unsigned ProgramStartAddress;
   unsigned ArgumentsStartAddress;
-  bool Finished {false};
   
   struct SPUState {
     std::array<unsigned, kToyISARegNum> Regs;
     unsigned PC;
+    bool Finished {false};
   };
 
   enum class SegmentPermission {
@@ -204,23 +204,21 @@ private:
   SPUMemory RAM;
   SPUState State = {{}, 0};
 
-// Syscall handler
-  using SyscallHandler = void(*)(SPU *Self, SPU::SPUMemory &RAM, SPU::SPUState &State);
-  static void ExitSyscallHandler (SPU *Self, SPU::SPUMemory &RAM, SPU::SPUState &State) {
-    std::cout << "\033[1;32mExited with code " << State.Regs[0] << "\033[37m\n";
-    Self->Finished = true;
-  }
-  static constexpr std::array<SyscallHandler, 1> SyscallTable {&SPU::ExitSyscallHandler};
-// Syscall handler
 
 // Instruction handler
 using InstructionHandler = void(*)(ToySim::Instruction &DecodedInstruction, SPU::SPUMemory &RAM, SPU::SPUState &State); // SPU as argument
+using SyscallHandler = void(*)(SPU::SPUMemory &RAM, SPU::SPUState &State);
   class InstructionTable : std::array<InstructionHandler, OpCodeMax> {
   private:
     static void HandleInvalidOpCode(ToySim::Instruction &DecodedInstruction, SPU::SPUMemory &RAM, SPU::SPUState &State) {
       std::cout << "Invalid OpCode on PC = " << State.PC << ", skipping instruction\n";
     }
-  public:
+    static void ExitSyscallHandler (SPU::SPUMemory &RAM, SPU::SPUState &State) {
+      std::cout << "\033[1;32mExited with code " << State.Regs[0] << "\033[37m\n";
+      State.Finished = true;
+    }
+    public:
+    static constexpr std::array<SyscallHandler, 1> SyscallTable {&ExitSyscallHandler};
     InstructionTable() {
       std::fill(this->begin(), this->end(), &HandleInvalidOpCode);
       (*this)[OpCodeJ] = [](ToySim::Instruction &DecodedInstruction, SPU::SPUMemory &RAM, SPU::SPUState &State) {
@@ -312,6 +310,10 @@ using InstructionHandler = void(*)(ToySim::Instruction &DecodedInstruction, SPU:
         RAM.write(&rt2, sizeof(rt2), addr + sizeof(rt1));
         State.PC += 4;
       };
+      (*this)[OpCodeSYSCALL] = [](ToySim::Instruction &DecodedInstruction, SPU::SPUMemory &RAM, SPU::SPUState &State) {
+        SyscallTable[State.Regs[8]](RAM, State);
+        State.PC += 4;
+      };
       (*this)[OpCodeBNE] = [](ToySim::Instruction &DecodedInstruction, SPU::SPUMemory &RAM, SPU::SPUState &State) {
         assert(DecodedInstruction.Operands.size() == 3);
         assert(DecodedInstruction.Operands[0].OperandType == ImmEncoding);
@@ -361,14 +363,15 @@ using InstructionHandler = void(*)(ToySim::Instruction &DecodedInstruction, SPU:
         assert(DecodedInstruction.Operands[1].OperandType == RegEncoding);
         assert(DecodedInstruction.Operands[2].OperandType == RegEncoding);
         auto &rs2 = DecodedInstruction.Operands[0].Value;
-        auto &rs1 = State.Regs[DecodedInstruction.Operands[1].Value];
+        auto rs1Val = State.Regs[DecodedInstruction.Operands[1].Value];
+
         auto &rd = State.Regs[DecodedInstruction.Operands[2].Value];
         rd = 0;
         auto DepCount {0};
         for (unsigned Bit = 0; Bit < 32; ++Bit) {
           auto Masked = rs2 & (1 << Bit);
           if (Masked) {
-            if (rs1 & (1 << DepCount)) {
+            if (rs1Val & (1 << DepCount)) {
               rd |= Masked;
             }
             ++DepCount;
